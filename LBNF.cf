@@ -1,0 +1,24 @@
+-- A grammar for LBNF
+
+-- A grammar is a list of rules terminated by semicolon.
+
+Rules.  Grammar ::= [Rule] ;
+
+terminator Rule ";" ;
+
+-- A rule consists of a rule name, a non terminal, and a rhs
+-- which is a sentential form composed of entries.
+
+Prod.   Rule ::= Ident "." Ident "::=" [Entry] ;
+
+separator Entry "";
+
+-- An entry is either a terminal or a non terminal.
+
+Term.   Entry ::= String ;  -- A terminal is a string literal
+NT.     Entry ::= Ident  ;  -- A non-terminal is an identifier
+
+-- Haskell-style comments.
+
+comment "--" ;
+comment "{-" "-}" ;

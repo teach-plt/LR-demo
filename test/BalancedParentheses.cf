@@ -1,0 +1,7 @@
+-- 2018-11-07
+-- LBNF grammar for balanced parentheses.
+
+Par.  S ::= "(" S ")" S ;
+Done. S ::= ;
+
+-- EOF

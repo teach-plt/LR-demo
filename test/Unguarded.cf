@@ -1,0 +1,7 @@
+-- Grammar with unguarded NTs
+
+Sa. S ::= "a" ;
+SA. S ::= A   ;
+AB. A ::= B   ;
+BS. B ::= S   ;
+Aa. A ::= "a" ;
