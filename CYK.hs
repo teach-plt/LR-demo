@@ -2,6 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 import Control.Monad.Except
 import Control.Monad.State
@@ -23,10 +24,70 @@ import Data.Tuple (swap)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 
+-- uses microlens-platform
+import Lens.Micro
+import Lens.Micro.Extras (view)
+import Lens.Micro.TH (makeLenses)
+
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
-import LBNF.Print (printTree)
+import LBNF.Print (Print, printTree)
 import LBNF.ErrM
+
+-- | A grammar over non-terminal names x, rulenames r and an alphabet a
+--   consists of definitions of the nonterminals, represented as Ints.
+
+data Grammar' x r a = Grammar
+  { _grmNumNT  :: Int                   -- ^ Number of non-terminals.
+  , _grmNTDict :: Map x NT              -- ^ Names-to-number map for non-terminals.
+  , _grmNTDefs :: IntMap (NTDef' x r a) -- ^ Definitions of non-terminals.
+  }
+
+emptyGrammar :: Grammar' x r a
+emptyGrammar = Grammar 0 Map.empty IntMap.empty
+
+-- | A nonterminal is defined by a list of alternatives.
+
+data NTDef' x r a = NTDef { _ntName :: x, _ntDef :: [Alt' r a] }
+
+-- | Each alternative is a rule name plus a sentential form.
+
+data Alt' r a = Alt r (Form' a)
+
+-- | A sentential form is a string of symbols.
+
+newtype Form' a = Form [Symbol' a]
+  deriving (Eq, Show)
+
+-- | A symbol is a terminal or a non-terminal.
+
+data Symbol' a
+  = Term a
+  | NT NT
+  deriving (Eq, Show)
+
+-- | Non-terminals are natural numbers.
+type NT = Int
+
+-- Lenses
+makeLenses ''Grammar'
+makeLenses ''NTDef'
+
+-- | Disregarding 'NTName', we can join non-terminal definitions.
+
+instance (Print x, Eq x) => Semigroup (NTDef' x r a) where
+  NTDef x alts <> NTDef x' alts'
+    | x == x'   = NTDef x $ alts ++ alts'
+    | otherwise = error $ unwords $
+       [ "non-terminal names do not match:" ] ++ map printTree [x, x']
+
+-- | Grammar over single-character terminals with identifiers as rule names.
+
+type NTName   = A.Ident
+type RuleName = A.Ident
+type Grammar  = Grammar' NTName RuleName Char
+type NTDef    = NTDef' NTName RuleName Char
+type Form     = Form' Char
 
 -- | Main: read file passed by only command line argument and call 'run'.
 
@@ -75,50 +136,8 @@ runM = \case
     putStrLn $ "Error: " ++ err
     exitFailure
 
--- | A grammar over rulenames r and an alphabet a consists of definitions
---   of the nonterminals, represented as Ints.
-
-data Grammar' r a = Grammar
-  { grmNumNT  :: Int                 -- ^ Number of non-terminals.
-  , grmNTDict :: Map A.Ident NT      -- ^ Names-to-number map for non-terminals.
-  , grmNTDefs :: IntMap (NTDef' r a) -- ^ Definitions of non-terminals.
-  }
-
-emptyGrammar :: Grammar' r a
-emptyGrammar = Grammar 0 Map.empty IntMap.empty
-
--- | A nonterminal is defined by a list of alternatives.
-
-type NTDef' r a = [Alt' r a]
-
--- | Each alternative is a rule name plus a sentential form.
-
-data Alt' r a = Alt r (Form' a)
-
--- | A sentential form is a string of symbols.
-
-newtype Form' a = Form [Symbol' a]
-  deriving (Eq, Show)
-
--- | A symbol is a terminal or a non-terminal.
-
-data Symbol' a
-  = Term a
-  | NT NT
-  deriving (Eq, Show)
-
--- | Non-terminals are natural numbers.
-type NT = Int
-
--- | Grammar over single-character terminals with identifiers as rule names.
-
-type RuleName = A.Ident
-type Grammar  = Grammar' RuleName Char
-type NTDef    = NTDef' RuleName Char
-type Form     = Form' Char
-
 -- | Intermediate rule format.
-type IRule = (NT, RuleName, [A.Entry])
+type IRule = (NT, NTName, RuleName, [A.Entry])
 
 -- | Convert grammar to internal format; check for single-character terminals.
 
@@ -131,47 +150,48 @@ checkGrammar (A.Rules rs) = (`execStateT` emptyGrammar) $ do
     -- Check if we have seen NT x before.
     case Map.lookup x dict of
       -- Yes, use its number.
-      Just i  -> return ((i, r, es), grm)
+      Just i  -> return ((i, x, r, es), grm)
       -- No, insert a new entry into the dictionary.
-      Nothing -> return ((n, r, es), Grammar (n+1) (Map.insert x n dict) defs)
+      Nothing -> return ((n, x, r, es), Grammar (n+1) (Map.insert x n dict) defs)
 
   addRule :: IRule -> StateT Grammar M ()
-  addRule (i, r, es) = StateT $ \ grm -> do
+  addRule (i, x, r, es) = StateT $ \ grm -> do
     alt <- Alt r . Form <$> do
      forM es $ \case
       A.Term [a] -> return $ Term a
       A.Term _   -> throwError "terminals must be single-character strings"
-      A.NT x -> case Map.lookup x $ grmNTDict grm of
-        Nothing -> throwError $ "undefined non-terminal " ++ printTree x
+      A.NT y -> case Map.lookup y $ view grmNTDict grm of
+        Nothing -> throwError $ "undefined non-terminal " ++ printTree y
         Just j  -> return $ NT j
-    return ((), grm { grmNTDefs = IntMap.insertWith (++) i [alt] $ grmNTDefs grm })
+    return ((), over grmNTDefs (IntMap.insertWith (<>) i (NTDef x [alt])) grm)--{ grmNTDefs = IntMap.insertWith (++) i [alt] $ grmNTDefs grm })
 
 -- | Turn grammar back to original format.
 
 reifyGrammar :: Grammar -> A.Grammar
-reifyGrammar (Grammar _ dict defs) =
-  A.Rules . (`concatMap` IntMap.toList defs) $ \ (i, alts) ->
-    let x = ntToIdent i in
+reifyGrammar grm@(Grammar _ dict defs) =
+  A.Rules . (`concatMap` IntMap.toList defs) $ \ (i, NTDef x alts) ->
     (`map` alts) $ \ (Alt r (Form alpha)) ->
       A.Prod r x . (`map` alpha) $ \case
         Term a -> A.Term [a]
-        NT j   -> A.NT $ ntToIdent j
+        NT j   -> A.NT $ ntToIdent grm j
   where
   rdict = IntMap.fromList $ map swap $ Map.toList dict
-  ntToIdent i = IntMap.findWithDefault (error "printGrammar: impossible") i rdict
+
+ntToIdent :: Grammar -> NT -> NTName
+ntToIdent grm i = view ntName $
+  IntMap.findWithDefault (error "printGrammar: impossible") i $ view grmNTDefs grm
 
 -- | Guardedness checking.  Make sure there are no non-productive cycles like
 --   @S → S@ or @A → B; B → A@.
 --
 checkGuardedness :: Grammar -> M ()
-checkGuardedness (Grammar n dict defs) = do
+checkGuardedness grm@(Grammar n dict defs) = do
   -- Initial state: all NTs are considered unguarded
   let init  = IntMap.map (False,) defs
   let final = saturate (\ gs -> IntMap.traverseWithKey (step gs) gs) init
   unless (all fst final) $ do
-    let rdict = IntMap.fromList $ map swap $ Map.toList dict
     let is = mapMaybe (\ (i, (g , _)) -> if g then Nothing else Just i) $ IntMap.toList final
-    let us = map (\ i -> printTree $ IntMap.findWithDefault (error "impossible") i rdict) is
+    let us = map (printTree . ntToIdent grm) is
     throwError $ "ungarded non-terminals in grammar: " ++ unwords us
   where
   step :: IntMap (Bool, NTDef) -> Int -> (Bool, NTDef) -> Change (Bool, NTDef)
@@ -203,8 +223,8 @@ instance Guarded (Form' a) where
 instance Guarded (Alt' r a) where
   guarded gs (Alt _ sf) = guarded gs sf
 
-instance Guarded (NTDef' r a) where
-  guarded gs alts = all (guarded gs) alts
+instance Guarded (NTDef' x r a) where
+  guarded gs (NTDef _ alts) = all (guarded gs) alts
 
 -- Tool box for iteration
 
