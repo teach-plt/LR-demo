@@ -2,10 +2,15 @@
 
 all : CYK test
 
-test : test/BalancedParentheses test/Unguarded
+test : \
+  test/fail/Unguarded \
+  test/BalancedParentheses
 
 test/% : test/%.cf test/%.txt CYK
 	./CYK $(word 1,$^) < $(word 2,$^)
+
+test/fail/% : test/fail/%.cf test/fail/%.txt CYK
+	! ./CYK $(word 1,$^) < $(word 2,$^)
 
 CYK : CYK.hs LBNF/Test
 	ghc --make $< -o $@
