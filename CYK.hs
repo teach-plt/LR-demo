@@ -59,28 +59,22 @@ main = do
 -- | Parse grammar and then use it to parse stdin.
 
 run :: String -> IO ()
-run s = case pGrammar (myLexer s) of
-  Bad err  -> do
-    putStrLn "Syntax error in grammar file"
-    putStrLn err
-    exitFailure
-  Ok tree -> case checkGrammar tree of
-    Left err -> do
-      putStrLn "Error in grammar"
-      putStrLn err
-      exitFailure
-    Right grm -> do
-      putStrLn "Parsing stdin with the following grammar:"
-      putStrLn $ printTree $ reifyGrammar grm
-      runM $ checkGuardedness grm
-      stdin <- getContents
-      case parseWith grm stdin of
-        Left err -> do
-          putStrLn "Parse failed"
-          putStrLn err
-          exitFailure
-        Right _ -> do
-          putStrLn "Parse successful!"
+run s = do
+  tree <- runErr (putStrLn "Syntax error in grammar file") $ pGrammar (myLexer s)
+  grm  <- runM $ checkGrammar tree
+
+  putStrLn "Using the following grammar:"
+  putStrLn $ printTree $ reifyGrammar grm
+
+  let nullability = computeNullable grm
+  reportNullable grm nullability
+
+  runM $ checkGuardedness grm
+
+  putStrLn "Parsing stdin..."
+  stdin <- getContents
+  runM $ parseWith grm stdin
+  putStrLn "Parse successful!"
 
 type M = Either String
 
@@ -88,6 +82,14 @@ runM :: M a -> IO a
 runM = \case
   Right a -> return a
   Left err -> do
+    putStrLn $ "Error: " ++ err
+    exitFailure
+
+runErr :: IO () ->  Err a -> IO a
+runErr preErr = \case
+  Ok a -> return a
+  Bad err -> do
+    preErr
     putStrLn $ "Error: " ++ err
     exitFailure
 
@@ -129,8 +131,6 @@ reifyGrammar grm@(Grammar _ dict defs) =
       A.Prod r x . (`map` alpha) $ \case
         Term a -> A.Term [a]
         NT j   -> A.NT $ ntToIdent grm j
-  where
-  rdict = IntMap.fromList $ map swap $ Map.toList dict
 
 ntToIdent :: Grammar -> NT -> NTName
 ntToIdent grm i = view ntName $
@@ -143,6 +143,14 @@ checkGuardedness grm@(Grammar n dict defs) = do
     let is = mapMaybe (\ (i, g) -> if getGuarded g then Nothing else Just i) $ IntMap.toList gs
     let us = map (printTree . ntToIdent grm) is
     throwError $ "ungarded non-terminals in grammar: " ++ unwords us
+
+reportNullable :: Grammar -> IntMap Nullable -> IO ()
+reportNullable grm nullability = do
+  let ns = map (printTree . ntToIdent grm)
+         $ mapMaybe (\ (i, Nullable n) -> if n then Just i else Nothing)
+         $ IntMap.toList nullability
+  unless (null ns) $
+    putStrLn $ "Nullable non-terminals: " ++ unwords ns
 
 {-
 -- | Guardedness checking.  Make sure there are no non-productive cycles like
