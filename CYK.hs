@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE TemplateHaskell #-}
+-- {-# LANGUAGE TemplateHaskell #-}
 
 import Control.Monad.Except
 import Control.Monad.State
@@ -34,52 +34,7 @@ import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
 import LBNF.ErrM
 
--- | A grammar over non-terminal names x, rulenames r and an alphabet a
---   consists of definitions of the nonterminals, represented as Ints.
-
-data Grammar' x r a = Grammar
-  { _grmNumNT  :: Int                   -- ^ Number of non-terminals.
-  , _grmNTDict :: Map x NT              -- ^ Names-to-number map for non-terminals.
-  , _grmNTDefs :: IntMap (NTDef' x r a) -- ^ Definitions of non-terminals.
-  }
-
-emptyGrammar :: Grammar' x r a
-emptyGrammar = Grammar 0 Map.empty IntMap.empty
-
--- | A nonterminal is defined by a list of alternatives.
-
-data NTDef' x r a = NTDef { _ntName :: x, _ntDef :: [Alt' r a] }
-
--- | Each alternative is a rule name plus a sentential form.
-
-data Alt' r a = Alt r (Form' a)
-
--- | A sentential form is a string of symbols.
-
-newtype Form' a = Form [Symbol' a]
-  deriving (Eq, Show)
-
--- | A symbol is a terminal or a non-terminal.
-
-data Symbol' a
-  = Term a
-  | NT NT
-  deriving (Eq, Show)
-
--- | Non-terminals are natural numbers.
-type NT = Int
-
--- Lenses
-makeLenses ''Grammar'
-makeLenses ''NTDef'
-
--- | Disregarding 'NTName', we can join non-terminal definitions.
-
-instance (Print x, Eq x) => Semigroup (NTDef' x r a) where
-  NTDef x alts <> NTDef x' alts'
-    | x == x'   = NTDef x $ alts ++ alts'
-    | otherwise = error $ unwords $
-       [ "non-terminal names do not match:" ] ++ map printTree [x, x']
+import CFG
 
 -- | Grammar over single-character terminals with identifiers as rule names.
 
@@ -181,6 +136,15 @@ ntToIdent :: Grammar -> NT -> NTName
 ntToIdent grm i = view ntName $
   IntMap.findWithDefault (error "printGrammar: impossible") i $ view grmNTDefs grm
 
+checkGuardedness :: Grammar -> M ()
+checkGuardedness grm@(Grammar n dict defs) = do
+  let gs = computeGuardedness grm
+  unless (all getGuarded gs) $ do
+    let is = mapMaybe (\ (i, g) -> if getGuarded g then Nothing else Just i) $ IntMap.toList gs
+    let us = map (printTree . ntToIdent grm) is
+    throwError $ "ungarded non-terminals in grammar: " ++ unwords us
+
+{-
 -- | Guardedness checking.  Make sure there are no non-productive cycles like
 --   @S → S@ or @A → B; B → A@.
 --
@@ -246,7 +210,7 @@ saturate f = loop
 
 class Nullable a where
   nullable :: a -> Bool
-
+-}
 
 
 -- | CYK-like parser (does not do optimal sharing if grammar not in 2NF).
