@@ -6,6 +6,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Context-free grammars: syntax and grammar folds.
+
 module CFG where
 
 import Control.Monad.Except
@@ -79,6 +81,9 @@ instance (Show x, Eq x) => Semigroup (NTDef' x r t) where
 
 -- * Generic grammar folds.
 
+-- The class-based approach did not go well with Haskell's
+-- instance inference.
+--
 -- class GrmAlg t a where
 --   gaTerminal :: t -> a        -- ^ Single terminal.
 --   gaZero     :: a             -- ^ Empty language.
@@ -89,6 +94,9 @@ instance (Show x, Eq x) => Semigroup (NTDef' x r t) where
 -- class GrmFold t a b where
 --   grmFold :: GrmAlg t a => (NT -> a) -> b -> a
 
+-- | A grammar algebra provides an implementation for
+--   the operations constituting CFGs.
+
 data GrmAlg r t a = GrmAlg
   { gaTerminal :: t -> a        -- ^ Single terminal.
   , gaZero     :: a             -- ^ Empty language.
@@ -98,13 +106,17 @@ data GrmAlg r t a = GrmAlg
   , gaLabel    :: r -> a -> a   -- ^ Labelled language.
   }
 
+-- | @n@-ary concatenation, with a special case for empty concatenation.
 gaProduct :: GrmAlg r t a -> [a] -> a
 gaProduct ga [] = gaEps ga
 gaProduct ga as = foldl1 (gaConcat ga) as
 
+-- | @n@-ary alternative, with a special case for empty language.
 gaSum :: GrmAlg r t a -> [a] -> a
 gaSum ga [] = gaZero ga
 gaSum ga as = foldl1 (gaPlus ga) as
+
+-- | Generic fold over a grammar.
 
 class GrmFold r t a b where
   grmFold :: GrmAlg r t a -> (NT -> a) -> b -> a
@@ -127,7 +139,9 @@ instance GrmFold r t a (NTDef' x r t) where
   grmFold ga env (NTDef _x alts) = gaSum ga $ map (grmFold ga env) alts
 
 
--- | Computing properties of non-terminations by saturation.
+-- | Computing properties of non-terminals by saturation.
+--   The iteration is needed to handle the recursion inherent in CFGs.
+--   Requires a bounded lattice @a@.
 
 grmIterate :: forall r t a x . (Eq a, Ord a)
   => GrmAlg r t a   -- ^ Grammar algebra.

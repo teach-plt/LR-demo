@@ -32,7 +32,7 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
-import LBNF.ErrM
+import LBNF.ErrM (Err(Ok, Bad))
 
 import CFG
 
@@ -60,17 +60,24 @@ main = do
 
 run :: String -> IO ()
 run s = do
-  tree <- runErr (putStrLn "Syntax error in grammar file") $ pGrammar (myLexer s)
+
+  -- Parse CFG grammar from file in LBNF syntax
+  tree <- runErr (putStrLn "Syntax error in grammar file") $
+    pGrammar (myLexer s)
+
+  -- Scope-check grammar and convert into internal format.
   grm  <- runM $ checkGrammar tree
 
   putStrLn "Using the following grammar:"
   putStrLn $ printTree $ reifyGrammar grm
 
+  -- Do some extra analyses on the grammar.
   let nullability = computeNullable grm
   reportNullable grm nullability
 
   runM $ checkGuardedness grm
 
+  -- Run the parser.
   putStrLn "Parsing stdin..."
   stdin <- getContents
   runM $ parseWith grm stdin
@@ -102,6 +109,7 @@ checkGrammar :: A.Grammar -> M Grammar
 checkGrammar (A.Rules rs) = (`execStateT` emptyGrammar) $ do
   mapM_ addRule =<< mapM addNT rs
   where
+  -- Pass 1: collect non-terminals from lhss of rules.
   addNT :: A.Rule -> StateT Grammar M IRule
   addNT (A.Prod r x es) = StateT $ \ grm@(Grammar n dict defs) -> do
     -- Check if we have seen NT x before.
@@ -111,16 +119,19 @@ checkGrammar (A.Rules rs) = (`execStateT` emptyGrammar) $ do
       -- No, insert a new entry into the dictionary.
       Nothing -> return ((n, x, r, es), Grammar (n+1) (Map.insert x n dict) defs)
 
+  -- Pass 2: scope-check and convert rhss of rules.
   addRule :: IRule -> StateT Grammar M ()
   addRule (i, x, r, es) = StateT $ \ grm -> do
     alt <- Alt r . Form <$> do
      forM es $ \case
+      -- Current limitation: Since we have no lexer, terminals are characters.
       A.Term [a] -> return $ Term a
       A.Term _   -> throwError "terminals must be single-character strings"
+      -- Convert non-terminal names into de Bruijn indices (numbers).
       A.NT y -> case Map.lookup y $ view grmNTDict grm of
         Nothing -> throwError $ "undefined non-terminal " ++ printTree y
         Just j  -> return $ NT j
-    return ((), over grmNTDefs (IntMap.insertWith (<>) i (NTDef x [alt])) grm)--{ grmNTDefs = IntMap.insertWith (++) i [alt] $ grmNTDefs grm })
+    return ((), over grmNTDefs (IntMap.insertWith (<>) i (NTDef x [alt])) grm)
 
 -- | Turn grammar back to original format.
 
@@ -135,6 +146,11 @@ reifyGrammar grm@(Grammar _ dict defs) =
 ntToIdent :: Grammar -> NT -> NTName
 ntToIdent grm i = view ntName $
   IntMap.findWithDefault (error "printGrammar: impossible") i $ view grmNTDefs grm
+
+-- | Guardedness: An analysis checking for unproductive cycles like
+--   S → S
+--   or
+--   A → B, B → A.
 
 checkGuardedness :: Grammar -> M ()
 checkGuardedness grm@(Grammar n dict defs) = do
