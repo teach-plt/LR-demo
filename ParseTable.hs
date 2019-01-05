@@ -165,18 +165,22 @@ type ParseState' r t = Map (ParseItem' r t) (Lookahead t)
 
 -- | Completing a parse state.
 --
---   For each (X → α.Yβ, ts), add (Y → .γ, FIRST (map (β++) ts)).
+--   For each (X → α.Yβ, ts), add (Y → .γ, FIRST(β)∘ts)).
 --   This might add a whole new item or just extend the token list.
 
-complete :: forall x r t. (Ord r, Ord t) => Grammar' x r t -> ParseState' r t -> ParseState' r t
-complete (Grammar _ _ ntDefs) = saturate step
+complete :: forall x r t. (Ord r, Ord t)
+  => EGrammar' x r t
+  -> ParseState' r t
+  -> ParseState' r t
+complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
   where
   step :: ParseState' r t -> Change (ParseState' r t)
   step is = mapM_ add
-      [ (ParseItem (Rule y alt) gamma, la)
-      | (ParseItem _ (NT y : _), la) <- Map.toList is
-      , NTDef _ alts                 <- maybeToList $ IntMap.lookup y ntDefs
-      , alt@(Alt _ (Form gamma))     <- alts
+      [ (ParseItem (Rule y alt) gamma, la')
+      | (ParseItem _ (NT y : beta), la) <- Map.toList is
+      , NTDef _ alts                    <- maybeToList $ IntMap.lookup y ntDefs
+      , alt@(Alt _ (Form gamma))        <- alts
+      , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
       ]
       `execStateT` is
     where
@@ -199,7 +203,7 @@ complete (Grammar _ _ ntDefs) = saturate step
 --   { _sucEof :: Maybe
 
 --successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
-successors :: (Ord r, Ord t) => Grammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
+successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
 successors grm is = complete grm <$> Map.fromListWith (Map.unionWith SetMaybe.union)
   [ (sy, Map.singleton (ParseItem r alpha) la)
   | (ParseItem r (sy : alpha), la) <- Map.toList is
@@ -228,8 +232,8 @@ data PTGenState' r t = PTGenState
   , _stIPT    :: IPT' r t       -- ^ Internal parse table.
   }
 
-ptGen :: forall x r t. (Ord r, Ord t) => Grammar' x r t -> NT -> IPT' r t
-ptGen grm@(Grammar _ _ ntDefs) start = undefined
+ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> NT -> IPT' r t
+ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) = undefined
   where
   laEOF  = SetMaybe.singleton Nothing
   alts0  = maybe [] (view ntDef) $ IntMap.lookup start ntDefs

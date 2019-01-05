@@ -1,10 +1,14 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
+
+-- {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -226,9 +230,7 @@ firstAlg = GrmAlg
   , gaEps      = First $ SetMaybe.singleton Nothing
   , gaZero     = First $ SetMaybe.empty
   , gaPlus     = \ (First s) (First s') -> First $ SetMaybe.union s s'
-  , gaConcat   = \ (First s) (First s') ->
-         if | SetMaybe.member Nothing s -> First $ SetMaybe.union s s'
-            | otherwise                 -> First s
+  , gaConcat   = concatFirst
   , gaLabel    = const id
   }
 
@@ -236,6 +238,13 @@ firstAlg = GrmAlg
 
 emptyFirst :: First t
 emptyFirst = First $ SetMaybe.empty
+
+-- |  FIRST(αβ)  = FIRST(α) ∪ (NULLABLE(α) ⇒ FIRST(β)).
+
+concatFirst :: Ord t => First t -> First t -> First t
+concatFirst (First s) (First s')
+  | SetMaybe.member Nothing s = First $ SetMaybe.union s s'
+  | otherwise                 = First s
 
 -- | FIRST sets for all non-terminals.
 
@@ -245,3 +254,20 @@ type FirstSets t = IntMap (First t)
 
 computeFirst :: Ord t => Grammar' x r t -> FirstSets t
 computeFirst grm = grmIterate firstAlg grm emptyFirst Nothing
+
+-- Ambiguous: r
+-- firstSet :: (GrmFold r t (First t) b, Ord t) => FirstSets t -> b -> First t
+firstSet :: (Ord t) => FirstSets t -> Form' t -> First t
+firstSet fs = grmFold firstAlg (\ x -> IntMap.findWithDefault err x fs)
+  where
+  err = error $ "CFG.firstSet: undefined nonterminal"
+
+
+-- | Enriched grammar.
+
+data EGrammar' x r t = EGrammar
+  { _eGrm   :: Grammar' x r t   -- ^ CFG.
+  , _eStart :: NT               -- ^ Start symbol.
+  , _eFirst :: FirstSets t      -- ^ Precomputed FIRST sets.
+  }
+makeLenses ''EGrammar'
