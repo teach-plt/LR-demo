@@ -36,6 +36,7 @@ import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
 import LBNF.ErrM (Err(Ok, Bad))
 
+import Util
 import CFG
 import CharacterTokenGrammar
 import ParseTable
@@ -82,7 +83,7 @@ run s = do
 
   -- Run the parser.
   putStrLn "Parsing stdin..."
-  stdin <- getContents
+  stdin <- trim <$> getContents
   -- runM $ parseWith pt stdin
   -- putStrLn "Parse successful!"
   print $ runLR1Parser pt stdin

@@ -24,6 +24,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Data.Function (on)
 import Data.Maybe (catMaybes, maybeToList, listToMaybe)
 import Data.Either (partitionEithers)
 
@@ -89,10 +90,11 @@ runShiftReduceParser f input = loop $ SRState [] input
     act <- runMaybeT $ f st
     (TraceItem st act :) <$> do
       case (act, ts0) of
+        (Nothing                      , _   ) -> halt
         (Just Shift                   , t:ts) -> loop $ SRState (Term t : stk) ts
         (Just (Reduce (Rule x (Alt r alpha))), _)
           | Just stk' <- matchStack stk alpha -> loop $ SRState (NT x : stk') ts0
-        _ -> halt
+        _ -> error "runShiftReduceParser: reduce failed"
 
   matchStack stk (Form alpha) = List.stripPrefix (reverse alpha) stk
   halt = return []
@@ -136,7 +138,8 @@ lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
       -- Pop |alpha| many states
       let n = length alpha
       let (ss1, rest) = List1.splitAt n ss
-      guard $ length ss1 /= n  -- internal error, halt!
+      unless (length ss1 == n) $ error $ "lr1Control: control stack to short to reduce"
+      -- guard $ length ss1 == n  -- internal error, halt!
       -- Rest should be non-empty, otherwise internal error.
       ss2 <- MaybeT $ return $ List1.nonEmpty rest
       -- Execute the goto action
@@ -167,7 +170,21 @@ type Lookahead t = SetMaybe t  -- ^ The set of lookahead symbols.
 
 -- | A parse state is a map of parse items to lookahead lists.
 
-type ParseState' r t = Map (ParseItem' r t) (Lookahead t)
+newtype ParseState' r t = ParseState { theParseState :: Map (ParseItem' r t) (Lookahead t) }
+  deriving (Eq, Ord, Show)
+
+-- instance (Eq r, Eq t) => Eq (ParseState' r t) where
+--   (==) = (==) `on` (Map.keysSet . theParseState)
+
+-- instance (Ord r, Ord t) => Ord (ParseState' r t) where
+--   compare = compare `on` (Map.keysSet . theParseState)
+
+instance (Ord r, Ord t) => Semigroup (ParseState' r t) where
+  ParseState is <> ParseState is' = ParseState $ Map.unionWith SetMaybe.union is is'
+
+instance (Ord r, Ord t) => Monoid (ParseState' r t) where
+  mempty = ParseState $ Map.empty
+  mappend = (<>)
 
 -- | Completing a parse state.
 --
@@ -181,21 +198,21 @@ complete :: forall x r t. (Ord r, Ord t)
 complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
   where
   step :: ParseState' r t -> Change (ParseState' r t)
-  step is = mapM_ add
+  step (ParseState is) = mapM_ add
       [ (ParseItem (Rule y alt) gamma, la')
       | (ParseItem _ (NT y : beta), la) <- Map.toList is
       , NTDef _ alts                    <- maybeToList $ IntMap.lookup y ntDefs
       , alt@(Alt _ (Form gamma))        <- alts
       , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
       ]
-      `execStateT` is
+      `execStateT` ParseState is
     where
     -- Add a parse item candidate.
     add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
     add (k, new) = do
-      st <- get
+      ParseState st <- get
       let (mv, st') = Map.insertLookupWithKey (\ _ -> SetMaybe.union) k new st
-      put st'
+      put $ ParseState st'
       -- Detect change:
       case mv of
         -- Item is new?
@@ -210,8 +227,8 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
 
 --successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
 successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
-successors grm is = complete grm <$> Map.fromListWith (Map.unionWith SetMaybe.union)
-  [ (sy, Map.singleton (ParseItem r alpha) la)
+successors grm (ParseState is) = complete grm <$> Map.fromListWith (<>)
+  [ (sy, ParseState $ Map.singleton (ParseItem r alpha) la)
   | (ParseItem r (sy : alpha), la) <- Map.toList is
   ]
 
@@ -286,7 +303,7 @@ reduceAction rule = ISRAction Nothing $ Set.singleton rule
 -- | Compute the reduce actions for a parse state.
 
 reductions :: (Ord r, Ord t) => ParseState' r t -> ISRActions' r t
-reductions is = mconcat
+reductions (ParseState is) = mconcat
     [ ISRActions (if eof then ra else emptyAction) (Map.fromSet (const ra) ts)
     | (ParseItem r [], SetMaybe ts eof) <- Map.toList is
     , let ra = reduceAction r
@@ -318,7 +335,7 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
 
   -- The first state contains the productions for the start non-terminal.
   state0 :: ParseState' r t
-  state0 = complete grm $ Map.fromList items0
+  state0 = complete grm $ ParseState $ Map.fromList items0
     where
     laEOF  = SetMaybe.singleton Nothing
     alts0  = maybe [] (view ntDef) $ IntMap.lookup start ntDefs
