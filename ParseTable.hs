@@ -9,6 +9,7 @@
 
 module ParseTable where
 
+import Control.Arrow (first, second)
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -23,7 +24,8 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Data.Maybe (maybeToList, listToMaybe)
+import Data.Maybe (catMaybes, maybeToList, listToMaybe)
+import Data.Either (partitionEithers)
 
 -- uses microlens-platform
 import Lens.Micro
@@ -33,9 +35,10 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Print (Print, printTree)
 
-import SetMaybe (SetMaybe)
+import SetMaybe (SetMaybe(SetMaybe))
 import qualified SetMaybe
 
+import Util
 import Saturation
 import CFG
 import CharacterTokenGrammar
@@ -50,6 +53,7 @@ type Input' t = [t]
 -- | The state of a shift-reduce parser consists of a stack and some input.
 
 data SRState' t = SRState { _srStack :: Stack' t, _srInput :: Input' t }
+  deriving (Show)
 makeLenses ''SRState'
 
 -- | An action of a shift-reduce parser.
@@ -57,6 +61,7 @@ makeLenses ''SRState'
 data SRAction' r t
   = Shift               -- ^ Shift next token onto stack.
   | Reduce (Rule' r t)  -- ^ Reduce with given rule.
+  deriving (Show)
 
 type Action' r t = Maybe (SRAction' r t)  -- ^ Nothing means halt.
 
@@ -66,6 +71,7 @@ data Rule' r t = Rule NT (Alt' r t)
 -- | A trace is a list of pairs of states and actions.
 
 data TraceItem' r t = TraceItem { _trState :: SRState' t, _trAction :: Action' r t }
+  deriving (Show)
 
 type Trace' r t = [TraceItem' r t]
 
@@ -220,9 +226,71 @@ type PSDict' r t = Map (ParseState' r t) PState
 -- Internal parse table
 
 data IPT' r t = IPT
-  { _iptSR   :: IntMap (Map (Maybe t) (Maybe (Either PState (Rule' r t))))
-  , _iptGoto :: IntMap (IntMap (Maybe PState))
+  { _iptSR   :: IntMap (ISRActions' r t)  -- ^ Map from states to shift-reduce actions.
+  , _iptGoto :: IntMap IGotoActions       -- ^ Map from states to goto actions.
   }
+  deriving (Show)
+
+-- | Goto actions of a state.
+--   Mapping non-terminals to successor states.
+
+type IGotoActions = IntMap PState
+
+-- | Shift-reduce actions of a state.
+
+data ISRActions' r t = ISRActions
+  { _iactEof  :: ISRAction' r t
+  , _iactTerm :: Map t (ISRAction' r t)
+  }
+  deriving (Eq, Ord, Show)
+
+instance (Ord r, Ord t) => Semigroup (ISRActions' r t) where
+  ISRActions aeof atok <> ISRActions aeof' atok' =
+    ISRActions (aeof <> aeof') (Map.unionWith (<>) atok atok')
+
+instance (Ord r, Ord t) => Monoid (ISRActions' r t) where
+  mempty = ISRActions mempty Map.empty
+  mappend = (<>)
+
+shiftActions :: (Ord r, Ord t) => Map t (ISRAction' r t) -> ISRActions' r t
+shiftActions = ISRActions mempty
+
+-- | Entry of a parse table cell: shift and/or reduce action(s).
+
+data ISRAction'  r t = ISRAction
+  { _iactShift  :: Maybe PState     -- ^ Possibly a shift action.
+  , _iactReduce :: Set (Rule' r t)  -- ^ Possibly several reduce actions.
+  }
+  deriving (Eq, Ord, Show)
+
+instance (Ord r, Ord t) => Semigroup (ISRAction' r t) where
+  ISRAction Just{} _ <> ISRAction Just{} _ = error $ "impossible: union of shift actions"
+  ISRAction ms1   r1 <> ISRAction ms2   r2 = ISRAction ms r
+    where
+    ms = listToMaybe $ maybeToList ms1 ++ maybeToList ms2
+    r  = Set.union r1 r2
+
+instance (Ord r, Ord t) => Monoid (ISRAction' r t) where
+  mempty = emptyAction
+  mappend = (<>)
+
+emptyAction :: ISRAction' r t
+emptyAction = ISRAction Nothing Set.empty
+
+shiftAction :: PState -> ISRAction' r t
+shiftAction s = ISRAction (Just s) Set.empty
+
+reduceAction :: Rule' r t -> ISRAction' r t
+reduceAction rule = ISRAction Nothing $ Set.singleton rule
+
+-- | Compute the reduce actions for a parse state.
+
+reductions :: (Ord r, Ord t) => ParseState' r t -> ISRActions' r t
+reductions is = mconcat
+    [ ISRActions (if eof then ra else emptyAction) (Map.fromSet (const ra) ts)
+    | (ParseItem r [], SetMaybe ts eof) <- Map.toList is
+    , let ra = reduceAction r
+    ]
 
 -- Parse table generator state
 
@@ -231,11 +299,95 @@ data PTGenState' r t = PTGenState
   , _stPSDict :: PSDict' r t    -- ^ Translation from states to state numbers.
   , _stIPT    :: IPT' r t       -- ^ Internal parse table.
   }
+makeLenses ''ISRAction'
+makeLenses ''ISRActions'
+makeLenses ''IPT'
+makeLenses ''PTGenState'
 
-ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> NT -> IPT' r t
-ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) = undefined
+-- nextState :: State (PTGenState' r t) PState
+-- nextState = state $ \ (PTGenState n dict ipt)
+
+ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> IPT' r t
+ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
+  view stIPT $ loop [state0] `execState` stInit
   where
-  laEOF  = SetMaybe.singleton Nothing
-  alts0  = maybe [] (view ntDef) $ IntMap.lookup start ntDefs
-  items0 = map (\ alt@(Alt r (Form alpha)) -> (ParseItem (Rule start alt) alpha, laEOF)) alts0
-  state0 = complete grm (Map.fromList items0)
+  stInit :: PTGenState' r t
+  stInit = PTGenState 1 (Map.singleton state0 0) $ IPT IntMap.empty IntMap.empty
+             -- IPT (IntMap.singleton 0 $ reductions state0)
+             --     (IntMap.singleton 0 $ IntMap.empty)  -- initially no goto actions
+
+  -- The first state contains the productions for the start non-terminal.
+  state0 :: ParseState' r t
+  state0 = complete grm $ Map.fromList items0
+    where
+    laEOF  = SetMaybe.singleton Nothing
+    alts0  = maybe [] (view ntDef) $ IntMap.lookup start ntDefs
+    items0 = flip map alts0 $ \ alt@(Alt r (Form alpha)) ->
+      (ParseItem (Rule start alt) alpha, laEOF)
+
+  -- Work of worklist of registered by not processed parse states.
+  loop :: [ParseState' r t] -> State (PTGenState' r t) ()
+  loop [] = return ()
+  loop (is : worklist) = do
+    dict <- use stPSDict
+    case Map.lookup is dict of
+      Nothing -> error "impossible: parse state without number"
+      Just snew  -> do
+        -- Compute successors of snew.
+        let sucs = Map.toList $ successors grm is
+        -- Register the successors (if not known yet).
+        (news, sucs') <- List.unzip <$> mapM convert sucs
+        -- Compute goto actions for state snew.
+        let fromSymbol (Term t, a) = Left  (t, a)
+            fromSymbol (NT x  , a) = Right (x, a)
+        let (shifts0, gotos0) = partitionEithers $ map fromSymbol sucs'
+        -- Equip the state snew with its goto actions.
+        unless (null gotos0) $ do
+          let gotos   = IntMap.fromList gotos0
+          modifying (stIPT . iptGoto) $ IntMap.insertWith IntMap.union snew gotos
+        -- Compute shift and reduce actions of snew.
+        let shifts  = Map.fromList $ map (\ (t,s) -> (t, shiftAction s)) shifts0
+        let reduces = reductions is
+        let actions = (shiftActions shifts <> reduces)
+        unless (actions == mempty) $ do
+        -- Equip the state snew with its shift/reduce actions.
+          modifying (stIPT . iptSR) $ IntMap.insertWith (<>) snew actions
+        -- Add the new states to the worklist and continue
+        loop $ catMaybes news ++ worklist
+
+  -- Register a parse state and remember whether we see it the first time.
+  convert :: (a, ParseState' r t) -> State (PTGenState' r t) (Maybe (ParseState' r t), (a, PState))
+  convert (a, is) = do
+    dict <- use stPSDict
+    snew <- use stNext
+    let (ms, dict') = Map.insertLookupWithKey (\ _ new old -> old) is snew dict
+    case ms of
+      -- Parse state has already been visited.
+      Just s -> return (Nothing, (a, s))
+      -- New parse state.
+      Nothing -> do
+        -- Increase parse state counter.
+        modifying stNext succ
+        -- Save updated dictionary.
+        modifying stPSDict (const dict')
+        return (Just is, (a, snew))
+
+-- | Shift over reduce.
+--   First reduce action out of several ones.
+
+chooseAction :: ISRAction' r t -> Maybe (Either PState (Rule' r t))
+chooseAction (ISRAction (Just s) rs) = Just (Left s)
+chooseAction (ISRAction Nothing  rs) = Right <$> do listToMaybe $ Set.toList rs
+
+-- | Construct the extensional parse table.
+constructParseTable' :: forall x r t. (Ord r, Ord t) => IPT' r t -> ParseTable' r t PState
+constructParseTable' (IPT sr goto) = ParseTable tabSR tabGoto tabInit
+  where
+  tabSR s Nothing  = chooseAction =<< do view iactEof <$> IntMap.lookup s sr
+  tabSR s (Just t) = chooseAction =<< Map.lookup t =<< do view iactTerm <$> IntMap.lookup s sr
+  tabGoto s x = IntMap.lookup x =<< IntMap.lookup s goto
+  tabInit = 0
+
+-- | Construct the extensional parse table.
+constructParseTable :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> ParseTable' r t PState
+constructParseTable = constructParseTable' . ptGen

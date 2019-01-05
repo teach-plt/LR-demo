@@ -19,6 +19,8 @@ import qualified Data.IntMap as IntMap
 import Data.Map (Map)
 import qualified Data.Map as Map
 
+import Data.Maybe
+
 -- uses microlens-platform
 import Lens.Micro
 import Lens.Micro.Extras (view)
@@ -42,10 +44,13 @@ type IRule = (NT, NTName, RuleName, [A.Entry])
 type Error = Either String
 
 -- | Convert grammar to internal format; check for single-character terminals.
-
-checkGrammar :: A.Grammar -> Error Grammar
-checkGrammar (A.Rules rs) = (`execStateT` emptyGrammar) $ do
-  mapM_ addRule =<< mapM addNT rs
+--   Also return start non-terminal if the grammar has any rules
+checkGrammar :: A.Grammar -> Error (Maybe NT, Grammar)
+checkGrammar (A.Rules rs) = (`runStateT` emptyGrammar) $ do
+  irs <- mapM addNT rs
+  mapM_ addRule irs
+  -- The start symbol is the lhs of the first rule
+  return $ listToMaybe $ map (\ (x, _, _, _) -> x) irs
   where
   -- Pass 1: collect non-terminals from lhss of rules.
   addNT :: A.Rule -> StateT Grammar Error IRule

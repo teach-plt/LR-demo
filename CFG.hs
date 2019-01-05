@@ -271,3 +271,6 @@ data EGrammar' x r t = EGrammar
   , _eFirst :: FirstSets t      -- ^ Precomputed FIRST sets.
   }
 makeLenses ''EGrammar'
+
+makeEGrammar :: Ord t => Grammar' x r t -> NT -> EGrammar' x r t
+makeEGrammar grm start = EGrammar grm start $ computeFirst grm

@@ -1,18 +1,26 @@
-.PHONY: test
+.PHONY: LRtest CYKtest
 
-all : CYK test
+default: LR LRtest
 
-test : \
-  test/fail/Unguarded \
-  test/BalancedParentheses
+cyk : CYK CYKtest
 
-test/% : test/%.cf test/%.txt CYK
+%test : \
+  %test/fail/Unguarded \
+  %test/BalancedParentheses
+
+LRtest/% : test/%.cf test/%.txt LR
+	./LR $(word 1,$^) < $(word 2,$^)
+
+LRtest/fail/% : test/fail/%.cf test/fail/%.txt LR
+	! ./LR $(word 1,$^) < $(word 2,$^)
+
+CYKtest/% : test/%.cf test/%.txt CYK
 	./CYK $(word 1,$^) < $(word 2,$^)
 
-test/fail/% : test/fail/%.cf test/fail/%.txt CYK
+CYKtest/fail/% : test/fail/%.cf test/fail/%.txt CYK
 	! ./CYK $(word 1,$^) < $(word 2,$^)
 
-CYK : CYK.hs LBNF/Test
+CYK LR : % : %.hs LBNF/Test
 	ghc --make $< -o $@
 
 LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf
