@@ -51,19 +51,19 @@ data NTDef' x r t = NTDef { _ntName :: x, _ntDef :: [Alt' r t] }
 -- | Each alternative is a rule name plus a sentential form.
 
 data Alt' r t = Alt r (Form' t)
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | A sentential form is a string of symbols.
 
 newtype Form' t = Form { theForm :: [Symbol' t] }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | A symbol is a terminal or a non-terminal.
 
 data Symbol' t
   = Term t
   | NT NT
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | Non-terminals are natural numbers.
 type NT = Int

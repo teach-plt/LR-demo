@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -21,7 +22,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Data.Maybe (listToMaybe)
+import Data.Maybe (maybeToList, listToMaybe)
 
 -- uses microlens-platform
 import Lens.Micro
@@ -31,6 +32,7 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Print (Print, printTree)
 
+import Saturation
 import CFG
 import CharacterTokenGrammar
 
@@ -55,7 +57,7 @@ data SRAction' r t
 type Action' r t = Maybe (SRAction' r t)  -- ^ Nothing means halt.
 
 data Rule' r t = Rule NT (Alt' r t)
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | A trace is a list of pairs of states and actions.
 
@@ -160,26 +162,72 @@ lr1Control (ParseTable tabSR tabGoto) (SRState stk input) = do
 
 -- LR(1) parsetable generation.
 
--- | A parse item is a dotted rule X → α.β with a set of lookahead symbols.
+-- | A parse item is a dotted rule X → α.β.
 
 data ParseItem' r t = ParseItem
   { _piRule   :: Rule' r t    -- ^ The rule this item comes from.
   , _piRest   :: [Symbol' t]  -- ^ The rest after the ".".
-  , _piFollow :: SetMaybe' t  -- ^ The set of lookahead symbols.
   }
+  deriving (Eq, Ord, Show)
+
+type Lookahead t = SetMaybe' t  -- ^ The set of lookahead symbols.
 
 -- | A set of Maybe t is stored as a set of t plus a flag wether 'Nothing' is in the set.
 data SetMaybe' t = SetMaybe { _smSet :: Set t, _smNothing :: Bool }
 makeLenses ''ParseItem'
 makeLenses ''SetMaybe'
 
--- | A parse state is a set of parse items.
+-- | Union for SetMaybe.
+setMaybeUnion :: Ord t => SetMaybe' t -> SetMaybe' t -> SetMaybe' t
+setMaybeUnion (SetMaybe s b) (SetMaybe s' b') = SetMaybe (Set.union s s') (b || b')
 
-type ParseState' r t = Set (ParseItem' r t)
+setMaybeSubset :: Ord t => SetMaybe' t -> SetMaybe' t -> Bool
+setMaybeSubset (SetMaybe s b) (SetMaybe s' b') = (b' || not b) && Set.isSubsetOf s s'
+
+-- | A parse state is a map of parse items to lookahead lists.
+
+type ParseState' r t = Map (ParseItem' r t) (Lookahead t)
 
 -- | Completing a parse state.
-
 --
+--   For each (X → α.Yβ, ts), add (Y → .γ, ts).
+--   This might add a whole new item or just extend the token list.
 
--- complete :: ParseState' r t -> ParseState' r t
--- complete is
+complete :: forall x r t. (Ord r, Ord t) => Grammar' x r t -> ParseState' r t -> ParseState' r t
+complete (Grammar _ _ ntDefs) = saturate step
+  where
+  step :: ParseState' r t -> Change (ParseState' r t)
+  step is = mapM_ add
+      [ (ParseItem (Rule y alt) gamma, la)
+      | (ParseItem _ (NT y : _), la) <- Map.toList is
+      , NTDef _ alts                 <- maybeToList $ IntMap.lookup y ntDefs
+      , alt@(Alt _ (Form gamma))     <- alts
+      ]
+      `execStateT` is
+    where
+    -- Add a parse item candidate.
+    add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
+    add (k, new) = do
+      st <- get
+      let (mv, st') = Map.insertLookupWithKey (\ _ -> setMaybeUnion) k new st
+      put st'
+      -- Detect change:
+      case mv of
+        -- Item is new?
+        Nothing -> lift dirty
+        -- Item is old, maybe lookahead is new?
+        Just old -> unless (setMaybeSubset old new) $ lift dirty
+
+-- | Goto action for a parse state.
+
+-- data Successors' r t = Successors
+--   { _sucEof :: Maybe
+
+--successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
+successors :: (Ord r, Ord t) => Grammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
+successors grm is = complete grm <$> Map.fromListWith (Map.unionWith setMaybeUnion)
+  [ (sy, Map.singleton (ParseItem r alpha) la)
+  | (ParseItem r (sy : alpha), la) <- Map.toList is
+  ]
+
+-- ParseState
