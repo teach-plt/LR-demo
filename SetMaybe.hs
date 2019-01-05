@@ -14,6 +14,7 @@ import Lens.Micro.TH (makeLenses)
 --   plus a flag wether 'Nothing' is in the set.
 
 data SetMaybe t = SetMaybe { _smSet :: Set t, _smNothing :: Bool }
+  deriving (Eq, Ord, Show)
 
 makeLenses ''SetMaybe
 

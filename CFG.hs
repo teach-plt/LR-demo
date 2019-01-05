@@ -1,10 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Context-free grammars: syntax and grammar folds.
 
@@ -31,6 +33,8 @@ import Lens.Micro.Extras (view)
 import Lens.Micro.TH (makeLenses)
 
 import Saturation
+import SetMaybe (SetMaybe)
+import qualified SetMaybe
 
 -- | A grammar over non-terminal names x, rulenames r and an alphabet t
 --   consists of definitions of the nonterminals, represented as Ints.
@@ -148,9 +152,9 @@ grmIterate :: forall r t a x . (Eq a, Ord a)
   => GrmAlg r t a   -- ^ Grammar algebra.
   -> Grammar' x r t -- ^ Grammar.
   -> a              -- ^ Default/start value.
-  -> a              -- ^ Best value.
+  -> Maybe a        -- ^ Best value (if it exists).
   -> IntMap a       -- ^ Final value for each non-terminal.
-grmIterate ga grm@(Grammar n dict defs) bot top
+grmIterate ga grm@(Grammar n dict defs) bot mtop
   = IntMap.map fst
   $ saturate (\ gs -> IntMap.traverseWithKey (step gs) gs)
   $ IntMap.map (bot,) defs
@@ -160,7 +164,7 @@ grmIterate ga grm@(Grammar n dict defs) bot top
        -> (a, NTDef' x r t)
        -> Change (a, NTDef' x r t)
   step gs i d@(a, def)
-    | a /= top, let a' = grmFold ga env def, a' > a = do
+    | Just a /= mtop, let a' = grmFold ga env def, a' > a = do
       dirty  -- change!
       return (a', def)
     | otherwise = return d  -- no change
@@ -183,7 +187,7 @@ guardedAlg = GrmAlg
   }
 
 computeGuardedness :: Grammar' x r t -> IntMap Guarded
-computeGuardedness grm = grmIterate guardedAlg grm minBound maxBound
+computeGuardedness grm = grmIterate guardedAlg grm minBound (Just maxBound)
 
 -- * Nullability.
 
@@ -201,7 +205,43 @@ nullableAlg = GrmAlg
   }
 
 computeNullable :: Grammar' x r t -> IntMap Nullable
-computeNullable grm = grmIterate nullableAlg grm minBound maxBound
+computeNullable grm = grmIterate nullableAlg grm minBound (Just maxBound)
 
 
 -- * First sets
+
+newtype First t = First { getFirst :: SetMaybe t }
+  deriving (Eq, Ord, Show)
+
+-- | Rules to compute first sets.
+--
+--   FIRST(a)   = {a}
+--   FIRST(ε)   = {ε}
+--   FIRST(αβ)  = FIRST(α) ∪ (NULLABLE(α) ⇒ FIRST(β))
+--   FIRST(α+β) = FIRST(α) ∪ FIRST(β)
+
+firstAlg :: Ord t => GrmAlg r t (First t)
+firstAlg = GrmAlg
+  { gaTerminal = First . SetMaybe.singleton . Just
+  , gaEps      = First $ SetMaybe.singleton Nothing
+  , gaZero     = First $ SetMaybe.empty
+  , gaPlus     = \ (First s) (First s') -> First $ SetMaybe.union s s'
+  , gaConcat   = \ (First s) (First s') ->
+         if | SetMaybe.member Nothing s -> First $ SetMaybe.union s s'
+            | otherwise                 -> First s
+  , gaLabel    = const id
+  }
+
+-- | Empty FIRST set.
+
+emptyFirst :: First t
+emptyFirst = First $ SetMaybe.empty
+
+-- | FIRST sets for all non-terminals.
+
+type FirstSets t = IntMap (First t)
+
+-- | Compute FIRST sets for all non-terminals.
+
+computeFirst :: Ord t => Grammar' x r t -> FirstSets t
+computeFirst grm = grmIterate firstAlg grm emptyFirst Nothing
