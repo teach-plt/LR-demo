@@ -35,14 +35,8 @@ import LBNF.Print (Print, printTree)
 import LBNF.ErrM (Err(Ok, Bad))
 
 import CFG
+import CharacterTokenGrammar
 
--- | Grammar over single-character terminals with identifiers as rule names.
-
-type NTName   = A.Ident
-type RuleName = A.Ident
-type Grammar  = Grammar' NTName RuleName Char
-type NTDef    = NTDef' NTName RuleName Char
-type Form     = Form' Char
 
 -- | Main: read file passed by only command line argument and call 'run'.
 
@@ -99,53 +93,6 @@ runErr preErr = \case
     preErr
     putStrLn $ "Error: " ++ err
     exitFailure
-
--- | Intermediate rule format.
-type IRule = (NT, NTName, RuleName, [A.Entry])
-
--- | Convert grammar to internal format; check for single-character terminals.
-
-checkGrammar :: A.Grammar -> M Grammar
-checkGrammar (A.Rules rs) = (`execStateT` emptyGrammar) $ do
-  mapM_ addRule =<< mapM addNT rs
-  where
-  -- Pass 1: collect non-terminals from lhss of rules.
-  addNT :: A.Rule -> StateT Grammar M IRule
-  addNT (A.Prod r x es) = StateT $ \ grm@(Grammar n dict defs) -> do
-    -- Check if we have seen NT x before.
-    case Map.lookup x dict of
-      -- Yes, use its number.
-      Just i  -> return ((i, x, r, es), grm)
-      -- No, insert a new entry into the dictionary.
-      Nothing -> return ((n, x, r, es), Grammar (n+1) (Map.insert x n dict) defs)
-
-  -- Pass 2: scope-check and convert rhss of rules.
-  addRule :: IRule -> StateT Grammar M ()
-  addRule (i, x, r, es) = StateT $ \ grm -> do
-    alt <- Alt r . Form <$> do
-     forM es $ \case
-      -- Current limitation: Since we have no lexer, terminals are characters.
-      A.Term [a] -> return $ Term a
-      A.Term _   -> throwError "terminals must be single-character strings"
-      -- Convert non-terminal names into de Bruijn indices (numbers).
-      A.NT y -> case Map.lookup y $ view grmNTDict grm of
-        Nothing -> throwError $ "undefined non-terminal " ++ printTree y
-        Just j  -> return $ NT j
-    return ((), over grmNTDefs (IntMap.insertWith (<>) i (NTDef x [alt])) grm)
-
--- | Turn grammar back to original format.
-
-reifyGrammar :: Grammar -> A.Grammar
-reifyGrammar grm@(Grammar _ dict defs) =
-  A.Rules . (`concatMap` IntMap.toList defs) $ \ (i, NTDef x alts) ->
-    (`map` alts) $ \ (Alt r (Form alpha)) ->
-      A.Prod r x . (`map` alpha) $ \case
-        Term a -> A.Term [a]
-        NT j   -> A.NT $ ntToIdent grm j
-
-ntToIdent :: Grammar -> NT -> NTName
-ntToIdent grm i = view ntName $
-  IntMap.findWithDefault (error "printGrammar: impossible") i $ view grmNTDefs grm
 
 -- | Guardedness: An analysis checking for unproductive cycles like
 --   S → S

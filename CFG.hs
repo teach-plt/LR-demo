@@ -54,7 +54,7 @@ data Alt' r t = Alt r (Form' t)
 
 -- | A sentential form is a string of symbols.
 
-newtype Form' t = Form [Symbol' t]
+newtype Form' t = Form { theForm :: [Symbol' t] }
   deriving (Eq, Show)
 
 -- | A symbol is a terminal or a non-terminal.
