@@ -15,6 +15,7 @@ import Control.Monad.Trans.Maybe
 
 import qualified Data.Foldable as Fold
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as List1
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Map (Map)
@@ -68,7 +69,6 @@ type Trace' r t = [TraceItem' r t]
 -- | The next action is decided by a control function.
 
 type Control' r t m = SRState' t -> MaybeT m (SRAction' r t)
--- type Control' r t m = SRState' t -> m (Action' r t)
 
 -- | Run a shift-reduce parser given by control function on some input,
 --   Returning a trace of states and actions.
@@ -78,7 +78,6 @@ runShiftReduceParser f input = loop $ SRState [] input
   where
   loop st@(SRState stk ts0) = do
     act <- runMaybeT $ f st
-    -- act <- f st
     (TraceItem st act :) <$> do
       case (act, ts0) of
         (Just Shift                   , t:ts) -> loop $ SRState (Term t : stk) ts
@@ -92,73 +91,57 @@ runShiftReduceParser f input = loop $ SRState [] input
 
 -- | A parse table maps pairs of states and symbols to actions.
 --
---   State 'Nothing' is the initial state.
 --   Non-terminal 'Nothing' is the end of file.
 --   For non-terminals, either a shift or a reduce action is returned.
 --   For terminals, a goto action (next state) is returned.
 --   If 'Nothing' is returned, the parser halts.
 
 data ParseTable' r t s = ParseTable
-  { _tabSR   :: Maybe s -> Maybe t -> Maybe (Either s (Rule' r t))
-  , _tabGoto :: Maybe s -> NT      -> Maybe s
+  { _tabSR   :: s -> Maybe t -> Maybe (Either s (Rule' r t))
+  , _tabGoto :: s -> NT      -> Maybe s
+  , _tabInit :: s
   }
 makeLenses ''ParseTable'
 
--- | A LR control stack is a list of states.
---   An empty stack denotes the initial state.
+-- | A LR control stack is a non-empty list of states.
+--   The bottom element is the initial state.
 
-type LRStack' s = [s]
+type LRStack' s = List1.NonEmpty s
 
 -- | The LR control function modifies a control stack.
 --   It interprets the parse table.
 
 lr1Control :: ParseTable' r t s -> Control' r t (State (LRStack' s))
-lr1Control (ParseTable tabSR tabGoto) (SRState stk input) = do
+lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
   -- Get control stack
   ss <- get
   -- Query table on maybe top state and maybe first input token.
-  (MaybeT $ return $ tabSR (listToMaybe ss) (listToMaybe input)) >>= \case
+  (MaybeT $ return $ tabSR (List1.head ss) (listToMaybe input)) >>= \case
     -- Shift action:
     Left s -> do
       -- Put new state on top of stack
-      modify (s:)
+      modify (List1.cons s)
       return Shift
     -- Reduce action:
     Right rule@(Rule x (Alt _ (Form alpha))) -> do
       -- Pop |alpha| many states
       let n = length alpha
-      let (ss1, ss2) = splitAt n ss
+      let (ss1, rest) = List1.splitAt n ss
       guard $ length ss1 /= n  -- internal error, halt!
+      -- Rest should be non-empty, otherwise internal error.
+      ss2 <- MaybeT $ return $ List1.nonEmpty rest
       -- Execute the goto action
-      s <- MaybeT $ return $ tabGoto (listToMaybe ss2) x
-      put (s:ss2)
+      s <- MaybeT $ return $ tabGoto (List1.head ss2) x
+      put (List1.cons s ss2)
       return $ Reduce rule
 
--- lr1Control :: ParseTable' r t s -> Control' r t (State (LRStack' s))
--- lr1Control (ParseTable tabSR tabGoto) (SRState stk input) = do
---   ss <- get
---   let mts = List.uncons input
---   -- Query table on maybe top state and maybe first input token.
---   case tabSR (fst <$> List.uncons ss) (fst <$> mts) of
---     Nothing       -> return Nothing
---     -- Shift action:
---     Just (Left s) -> do
---       -- Put new state on top of stack
---       modify (s:)
---       return $ Just Shift
---     -- Reduce action:
---     Just (Right rule@(Rule x (Alt _ (Form alpha)))) -> do
---       -- Pop |alpha| many states
---       let n = length alpha
---       let (ss1, ss2) = splitAt n ss
---       if length ss1 /= n then return Nothing else do -- internal error, halt!
---       -- Execute the goto action
---       case tabGoto (fst <$> List.uncons ss2) x of
---         Nothing -> return Nothing
---         Just s -> do
---           put (s:ss2)
---           return $ Just $ Reduce rule
+-- | Run the LR(1) parser with the given parsetable.
 
+runLR1Parser :: (Eq t) => ParseTable' r t s -> Input' t -> Trace' r t
+runLR1Parser pt@(ParseTable _ _ s0) input =
+  runShiftReduceParser control input `evalState` (s0 List1.:| [])
+  where
+  control = lr1Control pt
 
 -- LR(1) parsetable generation.
 
