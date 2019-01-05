@@ -55,6 +55,7 @@ data SRAction' r t
 type Action' r t = Maybe (SRAction' r t)  -- ^ Nothing means halt.
 
 data Rule' r t = Rule NT (Alt' r t)
+  deriving (Eq, Show)
 
 -- | A trace is a list of pairs of states and actions.
 
@@ -155,3 +156,30 @@ lr1Control (ParseTable tabSR tabGoto) (SRState stk input) = do
 --         Just s -> do
 --           put (s:ss2)
 --           return $ Just $ Reduce rule
+
+
+-- LR(1) parsetable generation.
+
+-- | A parse item is a dotted rule X → α.β with a set of lookahead symbols.
+
+data ParseItem' r t = ParseItem
+  { _piRule   :: Rule' r t    -- ^ The rule this item comes from.
+  , _piRest   :: [Symbol' t]  -- ^ The rest after the ".".
+  , _piFollow :: SetMaybe' t  -- ^ The set of lookahead symbols.
+  }
+
+-- | A set of Maybe t is stored as a set of t plus a flag wether 'Nothing' is in the set.
+data SetMaybe' t = SetMaybe { _smSet :: Set t, _smNothing :: Bool }
+makeLenses ''ParseItem'
+makeLenses ''SetMaybe'
+
+-- | A parse state is a set of parse items.
+
+type ParseState' r t = Set (ParseItem' r t)
+
+-- | Completing a parse state.
+
+--
+
+-- complete :: ParseState' r t -> ParseState' r t
+-- complete is
