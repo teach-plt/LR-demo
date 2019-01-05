@@ -33,6 +33,9 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Print (Print, printTree)
 
+import SetMaybe (SetMaybe)
+import qualified SetMaybe
+
 import Saturation
 import CFG
 import CharacterTokenGrammar
@@ -152,20 +155,9 @@ data ParseItem' r t = ParseItem
   , _piRest   :: [Symbol' t]  -- ^ The rest after the ".".
   }
   deriving (Eq, Ord, Show)
-
-type Lookahead t = SetMaybe' t  -- ^ The set of lookahead symbols.
-
--- | A set of Maybe t is stored as a set of t plus a flag wether 'Nothing' is in the set.
-data SetMaybe' t = SetMaybe { _smSet :: Set t, _smNothing :: Bool }
 makeLenses ''ParseItem'
-makeLenses ''SetMaybe'
 
--- | Union for SetMaybe.
-setMaybeUnion :: Ord t => SetMaybe' t -> SetMaybe' t -> SetMaybe' t
-setMaybeUnion (SetMaybe s b) (SetMaybe s' b') = SetMaybe (Set.union s s') (b || b')
-
-setMaybeSubset :: Ord t => SetMaybe' t -> SetMaybe' t -> Bool
-setMaybeSubset (SetMaybe s b) (SetMaybe s' b') = (b' || not b) && Set.isSubsetOf s s'
+type Lookahead t = SetMaybe t  -- ^ The set of lookahead symbols.
 
 -- | A parse state is a map of parse items to lookahead lists.
 
@@ -173,7 +165,7 @@ type ParseState' r t = Map (ParseItem' r t) (Lookahead t)
 
 -- | Completing a parse state.
 --
---   For each (X → α.Yβ, ts), add (Y → .γ, ts).
+--   For each (X → α.Yβ, ts), add (Y → .γ, FIRST (map (β++) ts)).
 --   This might add a whole new item or just extend the token list.
 
 complete :: forall x r t. (Ord r, Ord t) => Grammar' x r t -> ParseState' r t -> ParseState' r t
@@ -192,14 +184,14 @@ complete (Grammar _ _ ntDefs) = saturate step
     add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
     add (k, new) = do
       st <- get
-      let (mv, st') = Map.insertLookupWithKey (\ _ -> setMaybeUnion) k new st
+      let (mv, st') = Map.insertLookupWithKey (\ _ -> SetMaybe.union) k new st
       put st'
       -- Detect change:
       case mv of
         -- Item is new?
         Nothing -> lift dirty
         -- Item is old, maybe lookahead is new?
-        Just old -> unless (setMaybeSubset old new) $ lift dirty
+        Just old -> unless (SetMaybe.isSubsetOf old new) $ lift dirty
 
 -- | Goto action for a parse state.
 
@@ -208,9 +200,38 @@ complete (Grammar _ _ ntDefs) = saturate step
 
 --successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
 successors :: (Ord r, Ord t) => Grammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
-successors grm is = complete grm <$> Map.fromListWith (Map.unionWith setMaybeUnion)
+successors grm is = complete grm <$> Map.fromListWith (Map.unionWith SetMaybe.union)
   [ (sy, Map.singleton (ParseItem r alpha) la)
   | (ParseItem r (sy : alpha), la) <- Map.toList is
   ]
 
--- ParseState
+-- ParseState dictionary
+
+type PState = Int
+
+initPState = 0
+
+type PSDict' r t = Map (ParseState' r t) PState
+
+-- Internal parse table
+
+data IPT' r t = IPT
+  { _iptSR   :: IntMap (Map (Maybe t) (Maybe (Either PState (Rule' r t))))
+  , _iptGoto :: IntMap (IntMap (Maybe PState))
+  }
+
+-- Parse table generator state
+
+data PTGenState' r t = PTGenState
+  { _stNext   :: Int            -- ^ Next unused state number.
+  , _stPSDict :: PSDict' r t    -- ^ Translation from states to state numbers.
+  , _stIPT    :: IPT' r t       -- ^ Internal parse table.
+  }
+
+ptGen :: forall x r t. (Ord r, Ord t) => Grammar' x r t -> NT -> IPT' r t
+ptGen grm@(Grammar _ _ ntDefs) start = undefined
+  where
+  laEOF  = SetMaybe.singleton Nothing
+  alts0  = maybe [] (view ntDef) $ IntMap.lookup start ntDefs
+  items0 = map (\ alt@(Alt r (Form alpha)) -> (ParseItem (Rule start alt) alpha, laEOF)) alts0
+  state0 = complete grm (Map.fromList items0)

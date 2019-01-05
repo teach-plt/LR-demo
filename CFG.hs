@@ -202,3 +202,6 @@ nullableAlg = GrmAlg
 
 computeNullable :: Grammar' x r t -> IntMap Nullable
 computeNullable grm = grmIterate nullableAlg grm minBound maxBound
+
+
+-- * First sets
