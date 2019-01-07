@@ -73,7 +73,8 @@ run s = do
   putStrLn "Using the following grammar:"
   putStrLn $ printTree $ reifyGrammar grm
 
-  let egrm = makeEGrammar grm start
+  let newstart = A.Ident "%start"
+  let egrm = addNewStart newstart newstart $ makeEGrammar grm start
   let ipt  = ptGen egrm
 
   putStrLn "Generated parse table:"

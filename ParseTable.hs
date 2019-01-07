@@ -25,7 +25,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Data.Function (on)
-import Data.Maybe (catMaybes, maybeToList, listToMaybe)
+import Data.Maybe (catMaybes, maybeToList, listToMaybe, fromMaybe)
 import Data.Either (partitionEithers)
 
 -- uses microlens-platform
@@ -138,11 +138,10 @@ lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
       -- Pop |alpha| many states
       let n = length alpha
       let (ss1, rest) = List1.splitAt n ss
-      unless (length ss1 == n) $ error $ "lr1Control: control stack to short to reduce"
-      -- guard $ length ss1 == n  -- internal error, halt!
       -- Rest should be non-empty, otherwise internal error.
-      ss2 <- MaybeT $ return $ List1.nonEmpty rest
-      -- Execute the goto action
+      let err = error $ "lr1Control: control stack to short to reduce"
+      let ss2 = fromMaybe err $ List1.nonEmpty rest
+      -- Execute the goto action (if present)
       s <- MaybeT $ return $ tabGoto (List1.head ss2) x
       put (List1.cons s ss2)
       return $ Reduce rule
@@ -172,6 +171,11 @@ type Lookahead t = SetMaybe t  -- ^ The set of lookahead symbols.
 
 newtype ParseState' r t = ParseState { theParseState :: Map (ParseItem' r t) (Lookahead t) }
   deriving (Eq, Ord, Show)
+
+-- fullyEqual :: (Eq r, Eq t) => ParseState' r t -> ParseState' r t -> Bool
+-- fullyEqual (ParseState is) (ParseState is') = is == is'
+
+-- -- | LALR: ignore the lookahead: fuse states with same items.
 
 -- instance (Eq r, Eq t) => Eq (ParseState' r t) where
 --   (==) = (==) `on` (Map.keysSet . theParseState)
@@ -222,10 +226,7 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
 
 -- | Goto action for a parse state.
 
--- data Successors' r t = Successors
---   { _sucEof :: Maybe
-
---successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
+-- successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
 successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
 successors grm (ParseState is) = complete grm <$> Map.fromListWith (<>)
   [ (sy, ParseState $ Map.singleton (ParseItem r alpha) la)
@@ -238,7 +239,16 @@ type PState = Int
 
 initPState = 0
 
-type PSDict' r t = Map (ParseState' r t) PState
+-- | LALR: LR0 automaton decorated with lookahead.
+--   The @LR0State@ is the @keysSet@ of a @ParseState@.
+
+type LR0State' r t = Set (ParseItem' r t)
+
+lr0state :: ParseState' r t -> LR0State' r t
+lr0state (ParseState is) = Map.keysSet is
+
+-- The dictionary maps LR0 states to state numbers and their best decoration.
+type PSDict' r t = Map (LR0State' r t) (PState, ParseState' r t)
 
 -- Internal parse table
 
@@ -281,7 +291,7 @@ data ISRAction'  r t = ISRAction
   deriving (Eq, Ord, Show)
 
 instance (Ord r, Ord t) => Semigroup (ISRAction' r t) where
-  ISRAction Just{} _ <> ISRAction Just{} _ = error $ "impossible: union of shift actions"
+  -- ISRAction Just{} _ <> ISRAction Just{} _ = error $ "impossible: union of shift actions"
   ISRAction ms1   r1 <> ISRAction ms2   r2 = ISRAction ms r
     where
     ms = listToMaybe $ maybeToList ms1 ++ maybeToList ms2
@@ -321,15 +331,13 @@ makeLenses ''ISRActions'
 makeLenses ''IPT'
 makeLenses ''PTGenState'
 
--- nextState :: State (PTGenState' r t) PState
--- nextState = state $ \ (PTGenState n dict ipt)
-
 ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> IPT' r t
 ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
   view stIPT $ loop [state0] `execState` stInit
   where
   stInit :: PTGenState' r t
-  stInit = PTGenState 1 (Map.singleton state0 0) $ IPT IntMap.empty IntMap.empty
+  stInit = PTGenState 1 (Map.singleton (lr0state state0) (0, state0)) $
+             IPT IntMap.empty IntMap.empty
              -- IPT (IntMap.singleton 0 $ reductions state0)
              --     (IntMap.singleton 0 $ IntMap.empty)  -- initially no goto actions
 
@@ -342,14 +350,21 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
     items0 = flip map alts0 $ \ alt@(Alt r (Form alpha)) ->
       (ParseItem (Rule start alt) alpha, laEOF)
 
-  -- Work of worklist of registered by not processed parse states.
+  -- Work off worklist of registered by not processed parse states.
   loop :: [ParseState' r t] -> State (PTGenState' r t) ()
   loop [] = return ()
   loop (is : worklist) = do
-    dict <- use stPSDict
-    case Map.lookup is dict of
+    let k = lr0state is  -- the LR0State of is
+    (Map.lookup k <$> use stPSDict) >>= \case
       Nothing -> error "impossible: parse state without number"
-      Just snew  -> do
+      Just (snew, is0)  -> do
+        -- Lookaheads are already updated by convert.
+        -- -- Update the lookaheads
+        -- is <- do
+        --   let is2 = is <> is0
+        --   if is2 == is0 then return is0 else do
+        --     modifying stPSDict $ Map.insert k (snew, is2)
+        --     return is2
         -- Compute successors of snew.
         let sucs = Map.toList $ successors grm is
         -- Register the successors (if not known yet).
@@ -372,21 +387,27 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
         -- Add the new states to the worklist and continue
         loop $ catMaybes news ++ worklist
 
-  -- Register a parse state and remember whether we see it the first time.
+  -- Register a parse state and decide whether we have to process it.
   convert :: (a, ParseState' r t) -> State (PTGenState' r t) (Maybe (ParseState' r t), (a, PState))
   convert (a, is) = do
-    dict <- use stPSDict
+    let k = lr0state is
     snew <- use stNext
-    let (ms, dict') = Map.insertLookupWithKey (\ _ new old -> old) is snew dict
-    case ms of
-      -- Parse state has already been visited.
-      Just s -> return (Nothing, (a, s))
+    (Map.lookup k <$> use stPSDict) >>= \case
+      -- Parse state has already been visited.  However, lookahead info might need update.
+      Just (s, is0) -> do
+        -- Combine old an new lookahead info.
+        let is' = is <> is0
+        if is' == is0 then return (Nothing, (a, s)) else do
+          -- If something changed, update the lookahead info.
+          -- Also, we will need to process this state again.
+          modifying stPSDict $ Map.insert k (s, is')
+          return (Just is', (a, s))
       -- New parse state.
       Nothing -> do
         -- Increase parse state counter.
         modifying stNext succ
         -- Save updated dictionary.
-        modifying stPSDict (const dict')
+        modifying stPSDict $ Map.insert k (snew, is) -- (const dict')
         return (Just is, (a, snew))
 
 -- | Shift over reduce.
@@ -408,3 +429,10 @@ constructParseTable' (IPT sr goto) = ParseTable tabSR tabGoto tabInit
 -- | Construct the extensional parse table.
 constructParseTable :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> ParseTable' r t PState
 constructParseTable = constructParseTable' . ptGen
+
+-- | Add rule @%start -> S@ for new start symbol.
+addNewStart :: x -> r -> EGrammar' x r t -> EGrammar' x r t
+addNewStart x r (EGrammar grm start fs) = EGrammar (add grm) newstart fs
+  where
+  add = over grmNTDefs $ IntMap.insert newstart $ NTDef x $ [Alt r $ Form [NT start]]
+  newstart = -1
