@@ -26,13 +26,40 @@ import ParseTable
 class DebugPrint a where
   debugPrint :: a -> String
 
+instance {-# OVERLAPPABLE #-} (Show t) => DebugPrint (Input' t) where
+  debugPrint ts = unwords $ map show ts
+
+instance (Show t) => DebugPrint (Symbol' t) where
+  debugPrint (Term t) = show t
+  debugPrint (NT x)   = show x
+
+instance (Show t) => DebugPrint (Stack' t) where
+  debugPrint s = unwords $ map debugPrint $ reverse s
+
+instance (Show t) => DebugPrint (SRState' t) where
+  debugPrint (SRState s inp) = unwords [ debugPrint s, "\t.", debugPrint inp ]
+
+instance (Show r, Show t) => DebugPrint (Rule' r t) where
+  debugPrint (Rule x (Alt r alpha)) = show r
+
+instance (Show r, Show t) => DebugPrint (SRAction' r t) where
+  debugPrint Shift      = "shift"
+  debugPrint (Reduce r) = unwords [ "reduce with rule", debugPrint r ]
+
+instance (Show r, Show t) => DebugPrint (Action' r t) where
+  debugPrint Nothing  = "halt"
+  debugPrint (Just a) = debugPrint a
+
+instance (Show r, Show t) => DebugPrint (TraceItem' r t) where
+  debugPrint (TraceItem s a) = concat [ debugPrint s, "\t", debugPrint a ]
+
+instance (Show r, Show t) => DebugPrint (Trace' r t) where
+  debugPrint tr = unlines $ map debugPrint tr
+
 instance DebugPrint IGotoActions where
   debugPrint gotos = unlines $ map ("\t" ++) $ map row $ IntMap.toList gotos
     where
     row (x, s) = unwords [ "NT", show x, "\tgoto state", show s ]
-
-instance (Show r, Show t) => DebugPrint (Rule' r t) where
-  debugPrint (Rule x (Alt r alpha)) = show r
 
 instance (Show r, Show t) => DebugPrint (ISRAction' r t) where
   debugPrint (ISRAction mshift rs) = intercalate ";" $ filter (not . null) $

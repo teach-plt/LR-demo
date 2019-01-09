@@ -87,7 +87,7 @@ run s = do
   stdin <- trim <$> getContents
   -- runM $ parseWith pt stdin
   -- putStrLn "Parse successful!"
-  print $ runLR1Parser pt stdin
+  putStrLn $ debugPrint $ runLR1Parser pt stdin
 
 type M = Either String
 
