@@ -1,12 +1,17 @@
-.PHONY: LRtest CYKtest
+.PHONY: LRtest CYKtest TAGS
+
+LRfiles=CFG.hs CharacterTokenGrammar.hs DebugPrint.hs ParseTable.hs SetMaybe.hs Saturation.hs Util.hs
 
 default: LR LRtest
 
 cyk : CYK CYKtest
 
-%test : \
-  %test/fail/Unguarded \
-  %test/BalancedParentheses
+CYKtest : \
+  CYKtest/fail/Unguarded \
+  CYKtest/BalancedParentheses
+
+LRtest : \
+  LRtest/BalancedParentheses
 
 LRtest/% : test/%.cf test/%.txt LR
 	./LR $(word 1,$^) < $(word 2,$^)
@@ -20,7 +25,10 @@ CYKtest/% : test/%.cf test/%.txt CYK
 CYKtest/fail/% : test/fail/%.cf test/fail/%.txt CYK
 	! ./CYK $(word 1,$^) < $(word 2,$^)
 
-CYK LR : % : %.hs LBNF/Test
+CYK : % : %.hs LBNF/Test
+	ghc --make $< -o $@
+
+LR : % : %.hs LBNF/Test $(LRfiles)
 	ghc --make $< -o $@
 
 LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf
@@ -39,6 +47,9 @@ pack : CYK.tgz
 
 CYK.tgz : LBNF.cf LBNF/*.hs LBNF/*.x LBNF/*.y CYK.hs Makefile
 	tar czf $@ $^
+
+TAGS :
+	hasktags --etags .
 
 clean:
 	-rm -f LBNF/*.log LBNF/*.aux LBNF/*.hi LBNF/*.o LBNF/*.dvi

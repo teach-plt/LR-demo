@@ -36,7 +36,9 @@ import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
 import LBNF.ErrM (Err(Ok, Bad))
 
+import DebugPrint
 import Util
+
 import CFG
 import CharacterTokenGrammar
 import ParseTable

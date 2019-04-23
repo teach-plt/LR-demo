@@ -30,6 +30,7 @@ import qualified Data.Set as Set
 
 import Data.Maybe (mapMaybe)
 import Data.Tuple (swap)
+import Data.Semigroup (Semigroup(..))
 
 -- uses microlens-platform
 import Lens.Micro

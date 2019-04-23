@@ -29,6 +29,7 @@ import qualified LBNF.Abs as A
 import LBNF.Print (printTree)
 
 import CFG
+import DebugPrint
 
 -- | Grammar over single-character terminals with identifiers as rule names.
 
@@ -89,3 +90,8 @@ reifyGrammar grm@(Grammar _ dict defs) =
 ntToIdent :: Grammar -> NT -> NTName
 ntToIdent grm i = view ntName $
   IntMap.findWithDefault (error "printGrammar: impossible") i $ view grmNTDefs grm
+
+-- * Printing
+
+instance DebugPrint (A.Ident) where
+  debugPrint (A.Ident s) = s
