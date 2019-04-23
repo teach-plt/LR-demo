@@ -1,0 +1,10 @@
+Or.     D ::= D "|" C   ;  -- Disjunctions
+Conj.   D ::= C         ;
+
+And.    C ::= C "&" A   ;  -- Conjunctions
+Atom.   C ::= A         ;
+
+TT.     A ::= "t"       ;  -- Atoms
+FF.     A ::= "f"       ;
+Var.    A ::= "x"       ;
+Parens. A ::= "(" D ")" ;

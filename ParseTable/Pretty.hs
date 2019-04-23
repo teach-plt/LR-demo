@@ -35,7 +35,7 @@ instance (DebugPrint r, DebugPrint t) => DebugPrint (Symbol' r t) where
   debugPrint (NonTerm x) = debugPrint x
 
 instance (DebugPrint r, DebugPrint t) => DebugPrint (Stack' r t) where
-  debugPrint s = unwords $ map debugPrint $ reverse s
+  debugPrint (Stack s) = unwords $ map debugPrint $ reverse s
 
 instance (DebugPrint r, DebugPrint t) => DebugPrint (SRState' r t) where
   debugPrint (SRState s inp) = unwords [ debugPrint s, "\t.", debugPrint inp ]
@@ -84,3 +84,13 @@ instance (Ord r, Ord t, DebugPrint r, DebugPrint t) => DebugPrint (IPT' r t) whe
     sr'    = map (second debugPrint) $ IntMap.toList sr
     goto'  = map (second debugPrint) $ IntMap.toList goto
     srgoto = IntMap.toList $ IntMap.fromListWith (\ s g -> unlines [s,g]) $ goto' ++ sr'
+
+instance (DebugPrint r, DebugPrint t) => DebugPrint (ParseItem' r t) where
+  debugPrint (ParseItem rule beta) = unwords
+    [ debugPrint rule
+    , "/"
+    , debugPrint beta
+    ]
+instance (DebugPrint r, DebugPrint t) => DebugPrint (ParseState' r t) where
+  debugPrint (ParseState m) = unlines $
+    map (\ (item, ls) -> unwords [ debugPrint item, debugPrint ls ]) $ Map.toList m

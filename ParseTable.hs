@@ -47,7 +47,9 @@ import CFG
 
 -- | A stack is a sentential form (reversed).
 
-type Stack' r t = [Symbol' r t]
+newtype Stack' r t = Stack [Symbol' r t]
+  deriving (Eq, Ord, Show)
+
 type Input' t = [t]
 
 -- | The state of a shift-reduce parser consists of a stack and some input.
@@ -83,16 +85,16 @@ type Control' r t m = SRState' r t -> MaybeT m (SRAction' r t)
 --   Returning a trace of states and actions.
 
 runShiftReduceParser :: (Eq t, Monad m) => Control' r t m -> Input' t -> m (Trace' r t)
-runShiftReduceParser f input = loop $ SRState [] input
+runShiftReduceParser f input = loop $ SRState (Stack []) input
   where
-  loop st@(SRState stk ts0) = do
+  loop st@(SRState (Stack stk) ts0) = do
     act <- runMaybeT $ f st
     (TraceItem st act :) <$> do
       case (act, ts0) of
         (Nothing                      , _   ) -> halt
-        (Just Shift                   , t:ts) -> loop $ SRState (Term t : stk) ts
+        (Just Shift                   , t:ts) -> loop $ SRState (Stack $ Term t : stk) ts
         (Just (Reduce (Rule x (Alt r alpha))), _)
-          | Just stk' <- matchStack stk alpha -> loop $ SRState (NonTerm x : stk') ts0
+          | Just stk' <- matchStack stk alpha -> loop $ SRState (Stack $ NonTerm x : stk') ts0
         _ -> error "runShiftReduceParser: reduce failed"
 
   matchStack stk (Form alpha) = List.stripPrefix (reverse alpha) stk
@@ -194,14 +196,18 @@ instance (Ord r, Ord t) => Monoid (ParseState' r t) where
 --   For each (X → α.Yβ, ts), add (Y → .γ, FIRST(β)∘ts)).
 --   This might add a whole new item or just extend the token list.
 
-complete :: forall x r t. (Ord r, Ord t)
+complete :: (Ord r, Ord t)
   => EGrammar' x r t
   -> ParseState' r t
   -> ParseState' r t
-complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
-  where
-  step :: ParseState' r t -> Change (ParseState' r t)
-  step (ParseState is) = mapM_ add
+complete = saturate . completeStep
+
+completeStep :: forall x r t. (Ord r, Ord t)
+  => EGrammar' x r t
+  -> ParseState' r t
+  -> Change (ParseState' r t)
+completeStep (EGrammar (Grammar _ _ ntDefs) _ fs) (ParseState is) =
+    mapM_ add
       [ (ParseItem (Rule y alt) gamma, la')
       | (ParseItem _ (NonTerm y : beta), la) <- Map.toList is
       , NTDef _ alts                         <- maybeToList $ IntMap.lookup (ntNum y) ntDefs
@@ -209,7 +215,7 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
       , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
       ]
       `execStateT` ParseState is
-    where
+  where
     -- Add a parse item candidate.
     add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
     add (k, new) = do
@@ -221,7 +227,36 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
         -- Item is new?
         Nothing -> lift dirty
         -- Item is old, maybe lookahead is new?
-        Just old -> unless (SetMaybe.isSubsetOf old new) $ lift dirty
+        Just old -> unless (SetMaybe.isSubsetOf new old) $ lift dirty
+
+-- complete :: forall x r t. (Ord r, Ord t)
+--   => EGrammar' x r t
+--   -> ParseState' r t
+--   -> ParseState' r t
+-- complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
+--   where
+--   step :: ParseState' r t -> Change (ParseState' r t)
+--   step (ParseState is) = mapM_ add
+--       [ (ParseItem (Rule y alt) gamma, la')
+--       | (ParseItem _ (NonTerm y : beta), la) <- Map.toList is
+--       , NTDef _ alts                         <- maybeToList $ IntMap.lookup (ntNum y) ntDefs
+--       , alt@(Alt _ (Form gamma))             <- alts
+--       , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
+--       ]
+--       `execStateT` ParseState is
+--     where
+--     -- Add a parse item candidate.
+--     add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
+--     add (k, new) = do
+--       ParseState st <- get
+--       let (mv, st') = Map.insertLookupWithKey (\ _ -> SetMaybe.union) k new st
+--       put $ ParseState st'
+--       -- Detect change:
+--       case mv of
+--         -- Item is new?
+--         Nothing -> lift dirty
+--         -- Item is old, maybe lookahead is new?
+--         Just old -> unless (SetMaybe.isSubsetOf old new) $ lift dirty
 
 -- | Goto action for a parse state.
 
@@ -329,6 +364,16 @@ makeLenses ''ISRAction'
 makeLenses ''ISRActions'
 makeLenses ''IPT'
 makeLenses ''PTGenState'
+
+ptState0 :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t
+ptState0 grm@(EGrammar (Grammar _ _ ntDefs) start _fs) =
+  -- complete grm $
+    ParseState $ Map.fromList items0
+  where
+    laEOF  = SetMaybe.singleton Nothing
+    alts0  = maybe [] (view ntDef) $ IntMap.lookup (ntNum start) ntDefs
+    items0 = flip map alts0 $ \ alt@(Alt r (Form alpha)) ->
+      (ParseItem (Rule start alt) alpha, laEOF)
 
 ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> IPT' r t
 ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =

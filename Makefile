@@ -11,7 +11,8 @@ CYKtest : \
   CYKtest/BalancedParentheses
 
 LRtest : \
-  LRtest/BalancedParentheses
+  LRtest/BalancedParentheses \
+  LRtest/LogicalExpressions
 
 LRtest/% : test/%.cf test/%.txt LR
 	./LR $(word 1,$^) < $(word 2,$^)
