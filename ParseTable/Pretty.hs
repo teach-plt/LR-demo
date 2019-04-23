@@ -27,14 +27,17 @@ import ParseTable
 instance {-# OVERLAPPABLE #-} (Show t) => DebugPrint (Input' t) where
   debugPrint ts = unwords $ map show ts
 
-instance (Show t) => DebugPrint (Symbol' t) where
-  debugPrint (Term t)    = show t
-  debugPrint (NonTerm x) = show x
+instance DebugPrint (NT' r) where
+  debugPrint x = show x
 
-instance (Show t) => DebugPrint (Stack' t) where
+instance (DebugPrint r, Show t) => DebugPrint (Symbol' r t) where
+  debugPrint (Term t)    = show t
+  debugPrint (NonTerm x) = debugPrint x
+
+instance (DebugPrint r, Show t) => DebugPrint (Stack' r t) where
   debugPrint s = unwords $ map debugPrint $ reverse s
 
-instance (Show t) => DebugPrint (SRState' t) where
+instance (DebugPrint r, Show t) => DebugPrint (SRState' r t) where
   debugPrint (SRState s inp) = unwords [ debugPrint s, "\t.", debugPrint inp ]
 
 instance (DebugPrint r) => DebugPrint (Rule' r t) where

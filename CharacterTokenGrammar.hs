@@ -36,6 +36,7 @@ import DebugPrint
 type NTName   = A.Ident
 type RuleName = A.Ident
 type Grammar  = Grammar' NTName RuleName Char
+type NT       = NT' NTName
 type NTDef    = NTDef' NTName RuleName Char
 type Form     = Form' Char
 

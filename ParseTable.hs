@@ -48,12 +48,12 @@ import CharacterTokenGrammar
 
 -- | A stack is a sentential form (reversed).
 
-type Stack' t = [Symbol' t]
+type Stack' r t = [Symbol' r t]
 type Input' t = [t]
 
 -- | The state of a shift-reduce parser consists of a stack and some input.
 
-data SRState' t = SRState { _srStack :: Stack' t, _srInput :: Input' t }
+data SRState' r t = SRState { _srStack :: Stack' r t, _srInput :: Input' t }
   deriving (Show)
 makeLenses ''SRState'
 
@@ -71,14 +71,14 @@ data Rule' r t = Rule NT (Alt' r t)
 
 -- | A trace is a list of pairs of states and actions.
 
-data TraceItem' r t = TraceItem { _trState :: SRState' t, _trAction :: Action' r t }
+data TraceItem' r t = TraceItem { _trState :: SRState' r t, _trAction :: Action' r t }
   deriving (Show)
 
 type Trace' r t = [TraceItem' r t]
 
 -- | The next action is decided by a control function.
 
-type Control' r t m = SRState' t -> MaybeT m (SRAction' r t)
+type Control' r t m = SRState' r t -> MaybeT m (SRAction' r t)
 
 -- | Run a shift-reduce parser given by control function on some input,
 --   Returning a trace of states and actions.
@@ -159,8 +159,8 @@ runLR1Parser pt@(ParseTable _ _ s0) input =
 -- | A parse item is a dotted rule X → α.β.
 
 data ParseItem' r t = ParseItem
-  { _piRule   :: Rule' r t    -- ^ The rule this item comes from.
-  , _piRest   :: [Symbol' t]  -- ^ The rest after the ".".
+  { _piRule   :: Rule' r t      -- ^ The rule this item comes from.
+  , _piRest   :: [Symbol' r t]  -- ^ The rest after the ".".
   }
   deriving (Eq, Ord, Show)
 makeLenses ''ParseItem'
@@ -227,7 +227,7 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
 -- | Goto action for a parse state.
 
 -- successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
-successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t -> Map (Symbol' t) (ParseState' r t)
+successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t -> Map (Symbol' r t) (ParseState' r t)
 successors grm (ParseState is) = complete grm <$> Map.fromListWith (<>)
   [ (sy, ParseState $ Map.singleton (ParseItem r alpha) la)
   | (ParseItem r (sy : alpha), la) <- Map.toList is

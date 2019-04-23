@@ -46,7 +46,7 @@ import qualified SetMaybe
 
 data Grammar' x r t = Grammar
   { _grmNumNT  :: Int                   -- ^ Number of non-terminals.
-  , _grmNTDict :: Map x NT              -- ^ Names-to-number map for non-terminals.
+  , _grmNTDict :: Map x (NT' r)         -- ^ Names-to-number map for non-terminals.
   , _grmNTDefs :: IntMap (NTDef' x r t) -- ^ Definitions of non-terminals.
   }
 
@@ -59,23 +59,23 @@ data NTDef' x r t = NTDef { _ntName :: x, _ntDef :: [Alt' r t] }
 
 -- | Each alternative is a rule name plus a sentential form.
 
-data Alt' r t = Alt r (Form' t)
+data Alt' r t = Alt r (Form' r t)
   deriving (Eq, Ord, Show)
 
 -- | A sentential form is a string of symbols.
 
-newtype Form' t = Form { theForm :: [Symbol' t] }
+newtype Form' r t = Form { theForm :: [Symbol' r t] }
   deriving (Eq, Ord, Show)
 
 -- | A symbol is a terminal or a non-terminal.
 
-data Symbol' t
+data Symbol' r t
   = Term t
-  | NonTerm NT
+  | NonTerm (NT' r)
   deriving (Eq, Ord, Show)
 
 -- | Non-terminals are natural numbers.
-type NT = Int
+type NT' r = Int
 
 -- Lenses
 makeLenses ''Grammar'
@@ -129,17 +129,17 @@ gaSum ga as = foldl1 (gaPlus ga) as
 -- | Generic fold over a grammar.
 
 class GrmFold r t a b where
-  grmFold :: GrmAlg r t a -> (NT -> a) -> b -> a
+  grmFold :: GrmAlg r t a -> (NT' r -> a) -> b -> a
 
-instance GrmFold r t a NT where
+instance GrmFold r t a (NT' r') where
   grmFold ga env i = env i
 
-instance GrmFold r t a (Symbol' t) where
+instance GrmFold r t a (Symbol' r' t) where
   grmFold ga env = \case
     Term t    -> gaTerminal ga t
     NonTerm i -> env i
 
-instance GrmFold r t a (Form' t) where
+instance GrmFold r t a (Form' r' t) where
   grmFold ga env (Form alpha) = gaProduct ga $ map (grmFold ga env) alpha
 
 instance GrmFold r t a (Alt' r t) where
@@ -165,7 +165,7 @@ grmIterate ga grm@(Grammar n dict defs) bot mtop
   $ IntMap.map (bot,) defs
   where
   step :: IntMap (a, NTDef' x r t)
-       -> NT
+       -> NT' r
        -> (a, NTDef' x r t)
        -> Change (a, NTDef' x r t)
   step gs i d@(a, def)
@@ -258,7 +258,7 @@ computeFirst grm = grmIterate firstAlg grm emptyFirst Nothing
 
 -- Ambiguous: r
 -- firstSet :: (GrmFold r t (First t) b, Ord t) => FirstSets t -> b -> First t
-firstSet :: (Ord t) => FirstSets t -> Form' t -> First t
+firstSet :: (Ord t) => FirstSets t -> Form' r t -> First t
 firstSet fs = grmFold firstAlg (\ x -> IntMap.findWithDefault err x fs)
   where
   err = error $ "CFG.firstSet: undefined nonterminal"
@@ -268,10 +268,10 @@ firstSet fs = grmFold firstAlg (\ x -> IntMap.findWithDefault err x fs)
 
 data EGrammar' x r t = EGrammar
   { _eGrm   :: Grammar' x r t   -- ^ CFG.
-  , _eStart :: NT               -- ^ Start symbol.
+  , _eStart :: NT' r            -- ^ Start symbol.
   , _eFirst :: FirstSets t      -- ^ Precomputed FIRST sets.
   }
 makeLenses ''EGrammar'
 
-makeEGrammar :: Ord t => Grammar' x r t -> NT -> EGrammar' x r t
+makeEGrammar :: Ord t => Grammar' x r t -> NT' r -> EGrammar' x r t
 makeEGrammar grm start = EGrammar grm start $ computeFirst grm
