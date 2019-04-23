@@ -71,7 +71,7 @@ newtype Form' t = Form { theForm :: [Symbol' t] }
 
 data Symbol' t
   = Term t
-  | NT NT
+  | NonTerm NT
   deriving (Eq, Ord, Show)
 
 -- | Non-terminals are natural numbers.
@@ -136,8 +136,8 @@ instance GrmFold r t a NT where
 
 instance GrmFold r t a (Symbol' t) where
   grmFold ga env = \case
-    Term t -> gaTerminal ga t
-    NT i   -> env i
+    Term t    -> gaTerminal ga t
+    NonTerm i -> env i
 
 instance GrmFold r t a (Form' t) where
   grmFold ga env (Form alpha) = gaProduct ga $ map (grmFold ga env) alpha

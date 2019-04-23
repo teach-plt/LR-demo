@@ -74,7 +74,7 @@ checkGrammar (A.Rules rs) = (`runStateT` emptyGrammar) $ do
       -- Convert non-terminal names into de Bruijn indices (numbers).
       A.NT y -> case Map.lookup y $ view grmNTDict grm of
         Nothing -> throwError $ "undefined non-terminal " ++ printTree y
-        Just j  -> return $ NT j
+        Just j  -> return $ NonTerm j
     return ((), over grmNTDefs (IntMap.insertWith (<>) i (NTDef x [alt])) grm)
 
 -- | Turn grammar back to original format.
@@ -84,8 +84,8 @@ reifyGrammar grm@(Grammar _ dict defs) =
   A.Rules . (`concatMap` IntMap.toList defs) $ \ (i, NTDef x alts) ->
     (`map` alts) $ \ (Alt r (Form alpha)) ->
       A.Prod r x . (`map` alpha) $ \case
-        Term a -> A.Term [a]
-        NT j   -> A.NT $ ntToIdent grm j
+        Term a    -> A.Term [a]
+        NonTerm j -> A.NT $ ntToIdent grm j
 
 ntToIdent :: Grammar -> NT -> NTName
 ntToIdent grm i = view ntName $

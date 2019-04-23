@@ -93,7 +93,7 @@ runShiftReduceParser f input = loop $ SRState [] input
         (Nothing                      , _   ) -> halt
         (Just Shift                   , t:ts) -> loop $ SRState (Term t : stk) ts
         (Just (Reduce (Rule x (Alt r alpha))), _)
-          | Just stk' <- matchStack stk alpha -> loop $ SRState (NT x : stk') ts0
+          | Just stk' <- matchStack stk alpha -> loop $ SRState (NonTerm x : stk') ts0
         _ -> error "runShiftReduceParser: reduce failed"
 
   matchStack stk (Form alpha) = List.stripPrefix (reverse alpha) stk
@@ -204,9 +204,9 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
   step :: ParseState' r t -> Change (ParseState' r t)
   step (ParseState is) = mapM_ add
       [ (ParseItem (Rule y alt) gamma, la')
-      | (ParseItem _ (NT y : beta), la) <- Map.toList is
-      , NTDef _ alts                    <- maybeToList $ IntMap.lookup y ntDefs
-      , alt@(Alt _ (Form gamma))        <- alts
+      | (ParseItem _ (NonTerm y : beta), la) <- Map.toList is
+      , NTDef _ alts                         <- maybeToList $ IntMap.lookup y ntDefs
+      , alt@(Alt _ (Form gamma))             <- alts
       , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
       ]
       `execStateT` ParseState is
@@ -370,8 +370,8 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
         -- Register the successors (if not known yet).
         (news, sucs') <- List.unzip <$> mapM convert sucs
         -- Compute goto actions for state snew.
-        let fromSymbol (Term t, a) = Left  (t, a)
-            fromSymbol (NT x  , a) = Right (x, a)
+        let fromSymbol (Term    t, a) = Left  (t, a)
+            fromSymbol (NonTerm x, a) = Right (x, a)
         let (shifts0, gotos0) = partitionEithers $ map fromSymbol sucs'
         -- Equip the state snew with its goto actions.
         unless (null gotos0) $ do
@@ -434,5 +434,5 @@ constructParseTable = constructParseTable' . ptGen
 addNewStart :: x -> r -> EGrammar' x r t -> EGrammar' x r t
 addNewStart x r (EGrammar grm start fs) = EGrammar (add grm) newstart fs
   where
-  add = over grmNTDefs $ IntMap.insert newstart $ NTDef x $ [Alt r $ Form [NT start]]
+  add = over grmNTDefs $ IntMap.insert newstart $ NTDef x $ [Alt r $ Form [NonTerm start]]
   newstart = -1

@@ -28,8 +28,8 @@ instance {-# OVERLAPPABLE #-} (Show t) => DebugPrint (Input' t) where
   debugPrint ts = unwords $ map show ts
 
 instance (Show t) => DebugPrint (Symbol' t) where
-  debugPrint (Term t) = show t
-  debugPrint (NT x)   = show x
+  debugPrint (Term t)    = show t
+  debugPrint (NonTerm x) = show x
 
 instance (Show t) => DebugPrint (Stack' t) where
   debugPrint s = unwords $ map debugPrint $ reverse s
