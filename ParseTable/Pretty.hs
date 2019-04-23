@@ -24,20 +24,20 @@ import CFG
 import DebugPrint
 import ParseTable
 
-instance {-# OVERLAPPABLE #-} (Show t) => DebugPrint (Input' t) where
-  debugPrint ts = unwords $ map show ts
+instance {-# OVERLAPPABLE #-} (DebugPrint t) => DebugPrint (Input' t) where
+  debugPrint ts = unwords $ map debugPrint ts
 
 instance DebugPrint r => DebugPrint (NT' r) where
   debugPrint = debugPrint . ntNam
 
-instance (DebugPrint r, Show t) => DebugPrint (Symbol' r t) where
-  debugPrint (Term t)    = show t
+instance (DebugPrint r, DebugPrint t) => DebugPrint (Symbol' r t) where
+  debugPrint (Term t)    = debugPrint t
   debugPrint (NonTerm x) = debugPrint x
 
-instance (DebugPrint r, Show t) => DebugPrint (Stack' r t) where
+instance (DebugPrint r, DebugPrint t) => DebugPrint (Stack' r t) where
   debugPrint s = unwords $ map debugPrint $ reverse s
 
-instance (DebugPrint r, Show t) => DebugPrint (SRState' r t) where
+instance (DebugPrint r, DebugPrint t) => DebugPrint (SRState' r t) where
   debugPrint (SRState s inp) = unwords [ debugPrint s, "\t.", debugPrint inp ]
 
 instance (DebugPrint r) => DebugPrint (Rule' r t) where
@@ -51,10 +51,10 @@ instance (DebugPrint r) => DebugPrint (Action' r t) where
   debugPrint Nothing  = "halt"
   debugPrint (Just a) = debugPrint a
 
-instance (DebugPrint r, Show t) => DebugPrint (TraceItem' r t) where
+instance (DebugPrint r, DebugPrint t) => DebugPrint (TraceItem' r t) where
   debugPrint (TraceItem s a) = concat [ debugPrint s, "\t", debugPrint a ]
 
-instance (DebugPrint r, Show t) => DebugPrint (Trace' r t) where
+instance (DebugPrint r, DebugPrint t) => DebugPrint (Trace' r t) where
   debugPrint tr = unlines $ map debugPrint tr
 
 instance DebugPrint IGotoActions where
@@ -62,19 +62,19 @@ instance DebugPrint IGotoActions where
     where
     row (x, s) = unwords [ "NT", show x, "\tgoto state", show s ]
 
-instance (DebugPrint r, Show t) => DebugPrint (ISRAction' r t) where
+instance (DebugPrint r, DebugPrint t) => DebugPrint (ISRAction' r t) where
   debugPrint (ISRAction mshift rs) = intercalate ";" $ filter (not . null) $
     [ maybe "" (\ s -> unwords [ "shift to", show s ]) mshift
     , if null rs then ""
       else unwords [ "reduce with", intercalate " or " $ map debugPrint $ Set.toList rs ]
     ]
 
-instance (Ord r, Ord t, DebugPrint r, Show t) => DebugPrint (ISRActions' r t) where
+instance (Ord r, Ord t, DebugPrint r, DebugPrint t) => DebugPrint (ISRActions' r t) where
   debugPrint (ISRActions aeof tmap) = unlines $ map ("\t" ++) $
     (if aeof == mempty then id else (concat [ "eof", "\t", debugPrint aeof ] :)) $
-      map (\(t,act) -> concat [ show t, "\t", debugPrint act ]) (Map.toList tmap)
+      map (\(t,act) -> concat [ debugPrint t, "\t", debugPrint act ]) (Map.toList tmap)
 
-instance (Ord r, Ord t, DebugPrint r, Show t) => DebugPrint (IPT' r t) where
+instance (Ord r, Ord t, DebugPrint r, DebugPrint t) => DebugPrint (IPT' r t) where
   debugPrint (IPT sr goto) = unlines $ concat $ (`map` srgoto) $ \ (s, ls) ->
       [ unwords [ "State", show s ]
       , ""
@@ -84,25 +84,3 @@ instance (Ord r, Ord t, DebugPrint r, Show t) => DebugPrint (IPT' r t) where
     sr'    = map (second debugPrint) $ IntMap.toList sr
     goto'  = map (second debugPrint) $ IntMap.toList goto
     srgoto = IntMap.toList $ IntMap.fromListWith (\ s g -> unlines [s,g]) $ goto' ++ sr'
-
--- instance (Ord r, Ord t, Show r, Show t) => DebugPrint (IPT' r t) where
---   debugPrint (IPT sr goto) = unlines $ concat
---     [ [ "Shift/reduce actions"
---       , "====================="
---       , ""
---       ]
---     , concat $ (`map` IntMap.toList sr) $ \ (s,act) ->
---         [ unwords [ "State", show s ]
---         , ""
---         , debugPrint act
---         ]
---     , [ "Goto actions"
---       , "============"
---       , ""
---       ]
---     , concat $ (`map` IntMap.toList goto) $ \ (s,act) ->
---         [ unwords [ "State", show s ]
---         , ""
---         , debugPrint act
---         ]
---     ]

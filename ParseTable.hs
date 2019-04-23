@@ -42,7 +42,6 @@ import qualified SetMaybe
 import Util
 import Saturation
 import CFG
-import CharacterTokenGrammar
 
 -- Shift-reduce parser.
 

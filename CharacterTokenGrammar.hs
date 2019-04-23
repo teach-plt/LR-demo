@@ -33,12 +33,13 @@ import DebugPrint
 
 -- | Grammar over single-character terminals with identifiers as rule names.
 
+type Term     = Char
 type NTName   = A.Ident
 type RuleName = A.Ident
-type Grammar  = Grammar' NTName RuleName Char
+type Grammar  = Grammar' NTName RuleName Term
 type NT       = NT' NTName
-type NTDef    = NTDef' NTName RuleName Char
-type Form     = Form' Char
+type NTDef    = NTDef' NTName RuleName Term
+type Form     = Form' Term
 
 -- | Intermediate rule format.
 type IRule = (NT, RuleName, [A.Entry])
@@ -100,3 +101,7 @@ ntToIdent grm (NT i x) = x
 
 instance DebugPrint (A.Ident) where
   debugPrint (A.Ident s) = s
+
+instance DebugPrint Term where
+  debugPrint = show
+  -- debugPrint = (:[])

@@ -113,3 +113,8 @@ runErr preErr = \case
 
 -- parseWith :: ParseTable -> String -> M ()
 -- parseWith grm inp = throwError "NYI: LR parser"
+
+-- type Input = Input' Term
+
+-- instance DebugPrint Input where
+--   debugPrint = id
