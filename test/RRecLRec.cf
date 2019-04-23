@@ -1,0 +1,10 @@
+Base.  S ::= L R     ;
+
+LCons. L ::= L X "?" ;
+LNil.  L ::=         ;
+
+RCons. R ::= X "!" R ;
+RNil.  R ::=         ;
+
+A.     X ::= "a"     ;
+B.     X ::= "b"     ;

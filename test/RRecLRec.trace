@@ -1,0 +1,20 @@
+            . a ? b ? b ! a ! -- reduce with rule LNil
+L           . a ? b ? b ! a ! -- shift
+L a         . ? b ? b ! a !   -- reduce with rule A
+L X         . ? b ? b ! a !   -- shift
+L X ?       . b ? b ! a !     -- reduce with rule LCons
+L           . b ? b ! a !     -- shift
+L b         . ? b ! a !       -- reduce with rule B
+L X         . ? b ! a !       -- shift
+L X ?       . b ! a !         -- reduce with rule LCons
+L           . b ! a !         -- shift
+L b         . ! a !           -- reduce with rule B
+L X         . ! a !           -- shift
+L X !       . a !             -- shift
+L X ! a     . !               -- reduce with rule A
+L X ! X     . !               -- shift
+L X ! X !   .                 -- reduce with rule RNil
+L X ! X ! R .                 -- reduce with rule RCons
+L X ! R     .                 -- reduce with rule RCons
+L R         .                 -- reduce with rule Base
+S           .                 -- halt

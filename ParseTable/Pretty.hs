@@ -52,7 +52,7 @@ instance (DebugPrint r) => DebugPrint (Action' r t) where
   debugPrint (Just a) = debugPrint a
 
 instance (DebugPrint r, DebugPrint t) => DebugPrint (TraceItem' r t) where
-  debugPrint (TraceItem s a) = concat [ debugPrint s, "\t", debugPrint a ]
+  debugPrint (TraceItem s a) = concat [ debugPrint s, "\t-- ", debugPrint a ]
 
 instance (DebugPrint r, DebugPrint t) => DebugPrint (Trace' r t) where
   debugPrint tr = unlines $ map debugPrint tr

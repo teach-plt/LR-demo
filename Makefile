@@ -1,6 +1,6 @@
 .PHONY: LRtest CYKtest TAGS
 
-LRfiles=CFG.hs CharacterTokenGrammar.hs DebugPrint.hs ParseTable.hs SetMaybe.hs Saturation.hs Util.hs
+LRfiles=CFG.hs CharacterTokenGrammar.hs DebugPrint.hs ParseTable.hs ParseTable/Pretty.hs SetMaybe.hs Saturation.hs Util.hs
 
 default: LR LRtest
 
@@ -12,7 +12,8 @@ CYKtest : \
 
 LRtest : \
   LRtest/BalancedParentheses \
-  LRtest/LogicalExpressions
+  LRtest/LogicalExpressions \
+  LRtest/RRecLRec
 
 LRtest/% : test/%.cf test/%.txt LR
 	./LR $(word 1,$^) < $(word 2,$^)
