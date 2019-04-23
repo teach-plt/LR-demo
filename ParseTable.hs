@@ -66,7 +66,7 @@ data SRAction' r t
 
 type Action' r t = Maybe (SRAction' r t)  -- ^ Nothing means halt.
 
-data Rule' r t = Rule NT (Alt' r t)
+data Rule' r t = Rule (NT' r) (Alt' r t)
   deriving (Eq, Ord, Show)
 
 -- | A trace is a list of pairs of states and actions.
@@ -109,7 +109,7 @@ runShiftReduceParser f input = loop $ SRState [] input
 
 data ParseTable' r t s = ParseTable
   { _tabSR   :: s -> Maybe t -> Maybe (Either s (Rule' r t))
-  , _tabGoto :: s -> NT      -> Maybe s
+  , _tabGoto :: s -> NT' r   -> Maybe s
   , _tabInit :: s
   }
 makeLenses ''ParseTable'
@@ -205,7 +205,7 @@ complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
   step (ParseState is) = mapM_ add
       [ (ParseItem (Rule y alt) gamma, la')
       | (ParseItem _ (NonTerm y : beta), la) <- Map.toList is
-      , NTDef _ alts                         <- maybeToList $ IntMap.lookup y ntDefs
+      , NTDef _ alts                         <- maybeToList $ IntMap.lookup (ntNum y) ntDefs
       , alt@(Alt _ (Form gamma))             <- alts
       , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
       ]
@@ -346,7 +346,7 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
   state0 = complete grm $ ParseState $ Map.fromList items0
     where
     laEOF  = SetMaybe.singleton Nothing
-    alts0  = maybe [] (view ntDef) $ IntMap.lookup start ntDefs
+    alts0  = maybe [] (view ntDef) $ IntMap.lookup (ntNum start) ntDefs
     items0 = flip map alts0 $ \ alt@(Alt r (Form alpha)) ->
       (ParseItem (Rule start alt) alpha, laEOF)
 
@@ -371,7 +371,7 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
         (news, sucs') <- List.unzip <$> mapM convert sucs
         -- Compute goto actions for state snew.
         let fromSymbol (Term    t, a) = Left  (t, a)
-            fromSymbol (NonTerm x, a) = Right (x, a)
+            fromSymbol (NonTerm x, a) = Right (ntNum x, a)
         let (shifts0, gotos0) = partitionEithers $ map fromSymbol sucs'
         -- Equip the state snew with its goto actions.
         unless (null gotos0) $ do
@@ -423,7 +423,7 @@ constructParseTable' (IPT sr goto) = ParseTable tabSR tabGoto tabInit
   where
   tabSR s Nothing  = chooseAction =<< do view iactEof <$> IntMap.lookup s sr
   tabSR s (Just t) = chooseAction =<< Map.lookup t =<< do view iactTerm <$> IntMap.lookup s sr
-  tabGoto s x = IntMap.lookup x =<< IntMap.lookup s goto
+  tabGoto s x = IntMap.lookup (ntNum x) =<< IntMap.lookup s goto
   tabInit = 0
 
 -- | Construct the extensional parse table.
@@ -431,8 +431,10 @@ constructParseTable :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> ParseT
 constructParseTable = constructParseTable' . ptGen
 
 -- | Add rule @%start -> S@ for new start symbol.
-addNewStart :: x -> r -> EGrammar' x r t -> EGrammar' x r t
+addNewStart :: forall x r t. x -> r -> EGrammar' x r t -> EGrammar' x r t
 addNewStart x r (EGrammar grm start fs) = EGrammar (add grm) newstart fs
   where
-  add = over grmNTDefs $ IntMap.insert newstart $ NTDef x $ [Alt r $ Form [NonTerm start]]
-  newstart = -1
+  add = over grmNTDefs $ IntMap.insert (ntNum newstart) $
+          NTDef x $ [Alt r $ Form [NonTerm start]]
+  newstart :: NT' r
+  newstart = NT (0-1) r

@@ -41,7 +41,7 @@ type NTDef    = NTDef' NTName RuleName Char
 type Form     = Form' Char
 
 -- | Intermediate rule format.
-type IRule = (NT, NTName, RuleName, [A.Entry])
+type IRule = (NT, RuleName, [A.Entry])
 
 type Error = Either String
 
@@ -52,7 +52,7 @@ checkGrammar (A.Rules rs) = (`runStateT` emptyGrammar) $ do
   irs <- mapM addNT rs
   mapM_ addRule irs
   -- The start symbol is the lhs of the first rule
-  return $ listToMaybe $ map (\ (x, _, _, _) -> x) irs
+  return $ listToMaybe $ map (\ (x, _, _) -> x) irs
   where
   -- Pass 1: collect non-terminals from lhss of rules.
   addNT :: A.Rule -> StateT Grammar Error IRule
@@ -60,13 +60,13 @@ checkGrammar (A.Rules rs) = (`runStateT` emptyGrammar) $ do
     -- Check if we have seen NT x before.
     case Map.lookup x dict of
       -- Yes, use its number.
-      Just i  -> return ((i, x, r, es), grm)
+      Just i  -> return ((NT i x, r, es), grm)
       -- No, insert a new entry into the dictionary.
-      Nothing -> return ((n, x, r, es), Grammar (n+1) (Map.insert x n dict) defs)
+      Nothing -> return ((NT n x, r, es), Grammar (n+1) (Map.insert x n dict) defs)
 
   -- Pass 2: scope-check and convert rhss of rules.
   addRule :: IRule -> StateT Grammar Error ()
-  addRule (i, x, r, es) = StateT $ \ grm -> do
+  addRule (NT i x, r, es) = StateT $ \ grm -> do
     alt <- Alt r . Form <$> do
      forM es $ \case
       -- Current limitation: Since we have no lexer, terminals are characters.
@@ -75,7 +75,7 @@ checkGrammar (A.Rules rs) = (`runStateT` emptyGrammar) $ do
       -- Convert non-terminal names into de Bruijn indices (numbers).
       A.NT y -> case Map.lookup y $ view grmNTDict grm of
         Nothing -> throwError $ "undefined non-terminal " ++ printTree y
-        Just j  -> return $ NonTerm j
+        Just j  -> return $ NonTerm $ NT j y
     return ((), over grmNTDefs (IntMap.insertWith (<>) i (NTDef x [alt])) grm)
 
 -- | Turn grammar back to original format.
@@ -89,8 +89,12 @@ reifyGrammar grm@(Grammar _ dict defs) =
         NonTerm j -> A.NT $ ntToIdent grm j
 
 ntToIdent :: Grammar -> NT -> NTName
-ntToIdent grm i = view ntName $
-  IntMap.findWithDefault (error "printGrammar: impossible") i $ view grmNTDefs grm
+ntToIdent grm (NT i x) = x
+-- -- Lookup in Grammar no longer needed as NT's carry their name.
+-- ntToIdent grm (NT i x) =
+--   view ntName $
+--     IntMap.findWithDefault (error "printGrammar: impossible") i $
+--       view grmNTDefs grm
 
 -- * Printing
 

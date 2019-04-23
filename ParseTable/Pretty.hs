@@ -27,8 +27,8 @@ import ParseTable
 instance {-# OVERLAPPABLE #-} (Show t) => DebugPrint (Input' t) where
   debugPrint ts = unwords $ map show ts
 
-instance DebugPrint (NT' r) where
-  debugPrint x = show x
+instance DebugPrint r => DebugPrint (NT' r) where
+  debugPrint = debugPrint . ntNam
 
 instance (DebugPrint r, Show t) => DebugPrint (Symbol' r t) where
   debugPrint (Term t)    = show t

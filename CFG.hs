@@ -29,6 +29,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Data.Maybe (mapMaybe)
+import Data.Function (on)
 import Data.Tuple (swap)
 import Data.Semigroup (Semigroup(..))
 
@@ -46,7 +47,7 @@ import qualified SetMaybe
 
 data Grammar' x r t = Grammar
   { _grmNumNT  :: Int                   -- ^ Number of non-terminals.
-  , _grmNTDict :: Map x (NT' r)         -- ^ Names-to-number map for non-terminals.
+  , _grmNTDict :: Map x NTId            -- ^ Names-to-number map for non-terminals.
   , _grmNTDefs :: IntMap (NTDef' x r t) -- ^ Definitions of non-terminals.
   }
 
@@ -75,7 +76,15 @@ data Symbol' r t
   deriving (Eq, Ord, Show)
 
 -- | Non-terminals are natural numbers.
-type NT' r = Int
+--   We store the original name for printing purposes.
+--
+data NT' r = NT { ntNum :: NTId, ntNam :: r }
+  deriving (Show)
+
+instance Eq (NT' r) where (==) = (==) `on` ntNum
+instance Ord (NT' r) where compare = compare `on` ntNum
+
+type NTId = Int
 
 -- Lenses
 makeLenses ''Grammar'
@@ -129,15 +138,15 @@ gaSum ga as = foldl1 (gaPlus ga) as
 -- | Generic fold over a grammar.
 
 class GrmFold r t a b where
-  grmFold :: GrmAlg r t a -> (NT' r -> a) -> b -> a
+  grmFold :: GrmAlg r t a -> (NTId -> a) -> b -> a
 
-instance GrmFold r t a (NT' r') where
-  grmFold ga env i = env i
+instance GrmFold r t a (NT' r) where
+  grmFold ga env x = env $ ntNum x
 
 instance GrmFold r t a (Symbol' r' t) where
   grmFold ga env = \case
     Term t    -> gaTerminal ga t
-    NonTerm i -> env i
+    NonTerm x -> env $ ntNum x
 
 instance GrmFold r t a (Form' r' t) where
   grmFold ga env (Form alpha) = gaProduct ga $ map (grmFold ga env) alpha
@@ -165,7 +174,7 @@ grmIterate ga grm@(Grammar n dict defs) bot mtop
   $ IntMap.map (bot,) defs
   where
   step :: IntMap (a, NTDef' x r t)
-       -> NT' r
+       -> NTId
        -> (a, NTDef' x r t)
        -> Change (a, NTDef' x r t)
   step gs i d@(a, def)
