@@ -1,6 +1,6 @@
 .PHONY: LRtest CYKtest TAGS
 
-LRfiles=CFG.hs CharacterTokenGrammar.hs DebugPrint.hs ParseTable.hs ParseTable/Pretty.hs SetMaybe.hs Saturation.hs Util.hs
+LRfiles=LR.hs CFG.hs CharacterTokenGrammar.hs DebugPrint.hs ParseTable.hs ParseTable/Pretty.hs SetMaybe.hs Saturation.hs Util.hs
 
 default: LR LRtest
 
@@ -51,7 +51,7 @@ CYK.tgz : LBNF.cf LBNF/*.hs LBNF/*.x LBNF/*.y CYK.hs Makefile
 	tar czf $@ $^
 
 TAGS :
-	hasktags --etags .
+	hasktags --etags $(LRfiles)
 
 clean:
 	-rm -f LBNF/*.log LBNF/*.aux LBNF/*.hi LBNF/*.o LBNF/*.dvi

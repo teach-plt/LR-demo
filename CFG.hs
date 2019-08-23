@@ -56,33 +56,33 @@ emptyGrammar = Grammar 0 Map.empty IntMap.empty
 
 -- | A nonterminal is defined by a list of alternatives.
 
-data NTDef' x r t = NTDef { _ntName :: x, _ntDef :: [Alt' r t] }
+data NTDef' x r t = NTDef { _ntName :: x, _ntDef :: [Alt' x r t] }
 
 -- | Each alternative is a rule name plus a sentential form.
 
-data Alt' r t = Alt r (Form' r t)
+data Alt' x r t = Alt r (Form' x t)
   deriving (Eq, Ord, Show)
 
 -- | A sentential form is a string of symbols.
 
-newtype Form' r t = Form { theForm :: [Symbol' r t] }
+newtype Form' x t = Form { theForm :: [Symbol' x t] }
   deriving (Eq, Ord, Show)
 
 -- | A symbol is a terminal or a non-terminal.
 
-data Symbol' r t
+data Symbol' x t
   = Term t
-  | NonTerm (NT' r)
+  | NonTerm (NT' x)
   deriving (Eq, Ord, Show)
 
 -- | Non-terminals are natural numbers.
 --   We store the original name for printing purposes.
 --
-data NT' r = NT { ntNum :: NTId, ntNam :: r }
+data NT' x = NT { ntNum :: NTId, ntNam :: x }
   deriving (Show)
 
-instance Eq (NT' r) where (==) = (==) `on` ntNum
-instance Ord (NT' r) where compare = compare `on` ntNum
+instance Eq  (NT' x) where (==)    = (==)    `on` ntNum
+instance Ord (NT' x) where compare = compare `on` ntNum
 
 type NTId = Int
 
@@ -140,7 +140,7 @@ gaSum ga as = foldl1 (gaPlus ga) as
 class GrmFold r t a b where
   grmFold :: GrmAlg r t a -> (NTId -> a) -> b -> a
 
-instance GrmFold r t a (NT' r) where
+instance GrmFold r t a (NT' x) where
   grmFold ga env x = env $ ntNum x
 
 instance GrmFold r t a (Symbol' r' t) where
@@ -151,7 +151,7 @@ instance GrmFold r t a (Symbol' r' t) where
 instance GrmFold r t a (Form' r' t) where
   grmFold ga env (Form alpha) = gaProduct ga $ map (grmFold ga env) alpha
 
-instance GrmFold r t a (Alt' r t) where
+instance GrmFold r t a (Alt' x r t) where
   grmFold ga env (Alt r alpha) = gaLabel ga r (grmFold ga env alpha)
 
 instance GrmFold r t a (NTDef' x r t) where
@@ -277,10 +277,11 @@ firstSet fs = grmFold firstAlg (\ x -> IntMap.findWithDefault err x fs)
 
 data EGrammar' x r t = EGrammar
   { _eGrm   :: Grammar' x r t   -- ^ CFG.
-  , _eStart :: NT' r            -- ^ Start symbol.
+  , _eStart :: NT' x            -- ^ Start symbol.
   , _eFirst :: FirstSets t      -- ^ Precomputed FIRST sets.
   }
 makeLenses ''EGrammar'
 
-makeEGrammar :: Ord t => Grammar' x r t -> NT' r -> EGrammar' x r t
+makeEGrammar :: Ord t => Grammar' x r t -> NT' x -> EGrammar' x r t
 makeEGrammar grm start = EGrammar grm start $ computeFirst grm
+

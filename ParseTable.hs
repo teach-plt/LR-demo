@@ -47,54 +47,62 @@ import CFG
 
 -- | A stack is a sentential form (reversed).
 
-newtype Stack' r t = Stack [Symbol' r t]
+newtype Stack' x t = Stack [Symbol' x t]
   deriving (Eq, Ord, Show)
 
 type Input' t = [t]
 
 -- | The state of a shift-reduce parser consists of a stack and some input.
 
-data SRState' r t = SRState { _srStack :: Stack' r t, _srInput :: Input' t }
-  deriving (Show)
+data SRState' x t = SRState
+  { _srStack :: Stack' x t
+  , _srInput :: Input' t
+  } deriving (Show)
 makeLenses ''SRState'
 
 -- | An action of a shift-reduce parser.
 
-data SRAction' r t
-  = Shift               -- ^ Shift next token onto stack.
-  | Reduce (Rule' r t)  -- ^ Reduce with given rule.
+data SRAction' x r t
+  = Shift                 -- ^ Shift next token onto stack.
+  | Reduce (Rule' x r t)  -- ^ Reduce with given rule.
   deriving (Show)
 
-type Action' r t = Maybe (SRAction' r t)  -- ^ Nothing means halt.
+type Action' x r t = Maybe (SRAction' x r t)  -- ^ Nothing means halt.
 
-data Rule' r t = Rule (NT' r) (Alt' r t)
+data Rule' x r t = Rule (NT' x) (Alt' x r t)
   deriving (Eq, Ord, Show)
 
 -- | A trace is a list of pairs of states and actions.
 
-data TraceItem' r t = TraceItem { _trState :: SRState' r t, _trAction :: Action' r t }
-  deriving (Show)
+data TraceItem' x r t = TraceItem
+  { _trState  :: SRState' x t
+  , _trAction :: Action' x r t
+  } deriving (Show)
 
-type Trace' r t = [TraceItem' r t]
+type Trace' x r t = [TraceItem' x r t]
 
 -- | The next action is decided by a control function.
 
-type Control' r t m = SRState' r t -> MaybeT m (SRAction' r t)
+type Control' x r t m = SRState' x t -> MaybeT m (SRAction' x r t)
 
 -- | Run a shift-reduce parser given by control function on some input,
 --   Returning a trace of states and actions.
 
-runShiftReduceParser :: (Eq t, Monad m) => Control' r t m -> Input' t -> m (Trace' r t)
-runShiftReduceParser f input = loop $ SRState (Stack []) input
+runShiftReduceParser :: (Eq t, Monad m)
+  => Control' x r t m
+  -> Input' t
+  -> m (Trace' x r t)
+runShiftReduceParser nextAction input = loop $ SRState (Stack []) input
   where
   loop st@(SRState (Stack stk) ts0) = do
-    act <- runMaybeT $ f st
+    act <- runMaybeT $ nextAction st
     (TraceItem st act :) <$> do
       case (act, ts0) of
-        (Nothing                      , _   ) -> halt
-        (Just Shift                   , t:ts) -> loop $ SRState (Stack $ Term t : stk) ts
+        (Nothing   , _   ) -> halt
+        (Just Shift, t:ts) -> loop $ SRState (Stack $ Term t : stk) ts
         (Just (Reduce (Rule x (Alt r alpha))), _)
-          | Just stk' <- matchStack stk alpha -> loop $ SRState (Stack $ NonTerm x : stk') ts0
+          | Just stk' <- matchStack stk alpha
+                           -> loop $ SRState (Stack $ NonTerm x : stk') ts0
         _ -> error "runShiftReduceParser: reduce failed"
 
   matchStack stk (Form alpha) = List.stripPrefix (reverse alpha) stk
@@ -108,9 +116,9 @@ runShiftReduceParser f input = loop $ SRState (Stack []) input
 --   For terminals, a goto action (next state) is returned.
 --   If 'Nothing' is returned, the parser halts.
 
-data ParseTable' r t s = ParseTable
-  { _tabSR   :: s -> Maybe t -> Maybe (Either s (Rule' r t))
-  , _tabGoto :: s -> NT' r   -> Maybe s
+data ParseTable' x r t s = ParseTable
+  { _tabSR   :: s -> Maybe t -> Maybe (Either s (Rule' x r t))
+  , _tabGoto :: s -> NT' x   -> Maybe s
   , _tabInit :: s
   }
 makeLenses ''ParseTable'
@@ -123,7 +131,7 @@ type LRStack' s = List1.NonEmpty s
 -- | The LR control function modifies a control stack.
 --   It interprets the parse table.
 
-lr1Control :: ParseTable' r t s -> Control' r t (State (LRStack' s))
+lr1Control :: ParseTable' x r t s -> Control' x r t (State (LRStack' s))
 lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
   -- Get control stack
   ss <- get
@@ -149,7 +157,7 @@ lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
 
 -- | Run the LR(1) parser with the given parsetable.
 
-runLR1Parser :: (Eq t) => ParseTable' r t s -> Input' t -> Trace' r t
+runLR1Parser :: (Eq t) => ParseTable' x r t s -> Input' t -> Trace' x r t
 runLR1Parser pt@(ParseTable _ _ s0) input =
   runShiftReduceParser control input `evalState` (s0 List1.:| [])
   where
@@ -159,9 +167,9 @@ runLR1Parser pt@(ParseTable _ _ s0) input =
 
 -- | A parse item is a dotted rule X → α.β.
 
-data ParseItem' r t = ParseItem
-  { _piRule   :: Rule' r t      -- ^ The rule this item comes from.
-  , _piRest   :: [Symbol' r t]  -- ^ The rest after the ".".
+data ParseItem' x r t = ParseItem
+  { _piRule   :: Rule' x r t    -- ^ The rule this item comes from.
+  , _piRest   :: [Symbol' x t]  -- ^ The rest after the ".".
   }
   deriving (Eq, Ord, Show)
 makeLenses ''ParseItem'
@@ -170,7 +178,7 @@ type Lookahead t = SetMaybe t  -- ^ The set of lookahead symbols.
 
 -- | A parse state is a map of parse items to lookahead lists.
 
-newtype ParseState' r t = ParseState { theParseState :: Map (ParseItem' r t) (Lookahead t) }
+newtype ParseState' x r t = ParseState { theParseState :: Map (ParseItem' x r t) (Lookahead t) }
   deriving (Eq, Ord, Show)
 
 -- fullyEqual :: (Eq r, Eq t) => ParseState' r t -> ParseState' r t -> Bool
@@ -184,10 +192,10 @@ newtype ParseState' r t = ParseState { theParseState :: Map (ParseItem' r t) (Lo
 -- instance (Ord r, Ord t) => Ord (ParseState' r t) where
 --   compare = compare `on` (Map.keysSet . theParseState)
 
-instance (Ord r, Ord t) => Semigroup (ParseState' r t) where
+instance (Ord r, Ord t) => Semigroup (ParseState' x r t) where
   ParseState is <> ParseState is' = ParseState $ Map.unionWith SetMaybe.union is is'
 
-instance (Ord r, Ord t) => Monoid (ParseState' r t) where
+instance (Ord r, Ord t) => Monoid (ParseState' x r t) where
   mempty = ParseState $ Map.empty
   mappend = (<>)
 
@@ -198,14 +206,14 @@ instance (Ord r, Ord t) => Monoid (ParseState' r t) where
 
 complete :: (Ord r, Ord t)
   => EGrammar' x r t
-  -> ParseState' r t
-  -> ParseState' r t
+  -> ParseState' x r t
+  -> ParseState' x r t
 complete = saturate . completeStep
 
 completeStep :: forall x r t. (Ord r, Ord t)
   => EGrammar' x r t
-  -> ParseState' r t
-  -> Change (ParseState' r t)
+  -> ParseState' x r t
+  -> Change (ParseState' x r t)
 completeStep (EGrammar (Grammar _ _ ntDefs) _ fs) (ParseState is) =
     mapM_ add
       [ (ParseItem (Rule y alt) gamma, la')
@@ -217,7 +225,7 @@ completeStep (EGrammar (Grammar _ _ ntDefs) _ fs) (ParseState is) =
       `execStateT` ParseState is
   where
     -- Add a parse item candidate.
-    add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
+    add :: (ParseItem' x r t, Lookahead t) -> StateT (ParseState' x r t) Change ()
     add (k, new) = do
       ParseState st <- get
       let (mv, st') = Map.insertLookupWithKey (\ _ -> SetMaybe.union) k new st
@@ -261,7 +269,7 @@ completeStep (EGrammar (Grammar _ _ ntDefs) _ fs) (ParseState is) =
 -- | Goto action for a parse state.
 
 -- successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
-successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t -> Map (Symbol' r t) (ParseState' r t)
+successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' x r t -> Map (Symbol' x t) (ParseState' x r t)
 successors grm (ParseState is) = complete grm <$> Map.fromListWith (<>)
   [ (sy, ParseState $ Map.singleton (ParseItem r alpha) la)
   | (ParseItem r (sy : alpha), la) <- Map.toList is
@@ -276,19 +284,19 @@ initPState = 0
 -- | LALR: LR0 automaton decorated with lookahead.
 --   The @LR0State@ is the @keysSet@ of a @ParseState@.
 
-type LR0State' r t = Set (ParseItem' r t)
+type LR0State' x r t = Set (ParseItem' x r t)
 
-lr0state :: ParseState' r t -> LR0State' r t
+lr0state :: ParseState' x r t -> LR0State' x r t
 lr0state (ParseState is) = Map.keysSet is
 
 -- The dictionary maps LR0 states to state numbers and their best decoration.
-type PSDict' r t = Map (LR0State' r t) (PState, ParseState' r t)
+type PSDict' x r t = Map (LR0State' x r t) (PState, ParseState' x r t)
 
 -- Internal parse table
 
-data IPT' r t = IPT
-  { _iptSR   :: IntMap (ISRActions' r t)  -- ^ Map from states to shift-reduce actions.
-  , _iptGoto :: IntMap IGotoActions       -- ^ Map from states to goto actions.
+data IPT' x r t = IPT
+  { _iptSR   :: IntMap (ISRActions' x r t)  -- ^ Map from states to shift-reduce actions.
+  , _iptGoto :: IntMap IGotoActions         -- ^ Map from states to goto actions.
   }
   deriving (Show)
 
@@ -299,54 +307,54 @@ type IGotoActions = IntMap PState
 
 -- | Shift-reduce actions of a state.
 
-data ISRActions' r t = ISRActions
-  { _iactEof  :: ISRAction' r t
-  , _iactTerm :: Map t (ISRAction' r t)
+data ISRActions' x r t = ISRActions
+  { _iactEof  :: ISRAction' x r t
+  , _iactTerm :: Map t (ISRAction' x r t)
   }
   deriving (Eq, Ord, Show)
 
-instance (Ord r, Ord t) => Semigroup (ISRActions' r t) where
+instance (Ord r, Ord t) => Semigroup (ISRActions' x r t) where
   ISRActions aeof atok <> ISRActions aeof' atok' =
     ISRActions (aeof <> aeof') (Map.unionWith (<>) atok atok')
 
-instance (Ord r, Ord t) => Monoid (ISRActions' r t) where
+instance (Ord r, Ord t) => Monoid (ISRActions' x r t) where
   mempty = ISRActions mempty Map.empty
   mappend = (<>)
 
-shiftActions :: (Ord r, Ord t) => Map t (ISRAction' r t) -> ISRActions' r t
+shiftActions :: (Ord r, Ord t) => Map t (ISRAction' x r t) -> ISRActions' x r t
 shiftActions = ISRActions mempty
 
 -- | Entry of a parse table cell: shift and/or reduce action(s).
 
-data ISRAction'  r t = ISRAction
+data ISRAction' x r t = ISRAction
   { _iactShift  :: Maybe PState     -- ^ Possibly a shift action.
-  , _iactReduce :: Set (Rule' r t)  -- ^ Possibly several reduce actions.
+  , _iactReduce :: Set (Rule' x r t)  -- ^ Possibly several reduce actions.
   }
   deriving (Eq, Ord, Show)
 
-instance (Ord r, Ord t) => Semigroup (ISRAction' r t) where
+instance (Ord r, Ord t) => Semigroup (ISRAction' x r t) where
   -- ISRAction Just{} _ <> ISRAction Just{} _ = error $ "impossible: union of shift actions"
   ISRAction ms1   r1 <> ISRAction ms2   r2 = ISRAction ms r
     where
     ms = listToMaybe $ maybeToList ms1 ++ maybeToList ms2
     r  = Set.union r1 r2
 
-instance (Ord r, Ord t) => Monoid (ISRAction' r t) where
+instance (Ord r, Ord t) => Monoid (ISRAction' x r t) where
   mempty = emptyAction
   mappend = (<>)
 
-emptyAction :: ISRAction' r t
+emptyAction :: ISRAction' x r t
 emptyAction = ISRAction Nothing Set.empty
 
-shiftAction :: PState -> ISRAction' r t
+shiftAction :: PState -> ISRAction' x r t
 shiftAction s = ISRAction (Just s) Set.empty
 
-reduceAction :: Rule' r t -> ISRAction' r t
+reduceAction :: Rule' x r t -> ISRAction' x r t
 reduceAction rule = ISRAction Nothing $ Set.singleton rule
 
 -- | Compute the reduce actions for a parse state.
 
-reductions :: (Ord r, Ord t) => ParseState' r t -> ISRActions' r t
+reductions :: (Ord r, Ord t) => ParseState' x r t -> ISRActions' x r t
 reductions (ParseState is) = mconcat
     [ ISRActions (if eof then ra else emptyAction) (Map.fromSet (const ra) ts)
     | (ParseItem r [], SetMaybe ts eof) <- Map.toList is
@@ -355,17 +363,17 @@ reductions (ParseState is) = mconcat
 
 -- Parse table generator state
 
-data PTGenState' r t = PTGenState
-  { _stNext   :: Int            -- ^ Next unused state number.
-  , _stPSDict :: PSDict' r t    -- ^ Translation from states to state numbers.
-  , _stIPT    :: IPT' r t       -- ^ Internal parse table.
+data PTGenState' x r t = PTGenState
+  { _stNext   :: Int              -- ^ Next unused state number.
+  , _stPSDict :: PSDict' x r t    -- ^ Translation from states to state numbers.
+  , _stIPT    :: IPT' x r t       -- ^ Internal parse table.
   }
 makeLenses ''ISRAction'
 makeLenses ''ISRActions'
 makeLenses ''IPT'
 makeLenses ''PTGenState'
 
-ptState0 :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' r t
+ptState0 :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' x r t
 ptState0 grm@(EGrammar (Grammar _ _ ntDefs) start _fs) =
   -- complete grm $
     ParseState $ Map.fromList items0
@@ -375,18 +383,18 @@ ptState0 grm@(EGrammar (Grammar _ _ ntDefs) start _fs) =
     items0 = flip map alts0 $ \ alt@(Alt r (Form alpha)) ->
       (ParseItem (Rule start alt) alpha, laEOF)
 
-ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> IPT' r t
+ptGen :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> IPT' x r t
 ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
   view stIPT $ loop [state0] `execState` stInit
   where
-  stInit :: PTGenState' r t
+  stInit :: PTGenState' x r t
   stInit = PTGenState 1 (Map.singleton (lr0state state0) (0, state0)) $
              IPT IntMap.empty IntMap.empty
              -- IPT (IntMap.singleton 0 $ reductions state0)
              --     (IntMap.singleton 0 $ IntMap.empty)  -- initially no goto actions
 
   -- The first state contains the productions for the start non-terminal.
-  state0 :: ParseState' r t
+  state0 :: ParseState' x r t
   state0 = complete grm $ ParseState $ Map.fromList items0
     where
     laEOF  = SetMaybe.singleton Nothing
@@ -395,7 +403,7 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
       (ParseItem (Rule start alt) alpha, laEOF)
 
   -- Work off worklist of registered by not processed parse states.
-  loop :: [ParseState' r t] -> State (PTGenState' r t) ()
+  loop :: [ParseState' x r t] -> State (PTGenState' x r t) ()
   loop [] = return ()
   loop (is : worklist) = do
     let k = lr0state is  -- the LR0State of is
@@ -432,7 +440,7 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
         loop $ catMaybes news ++ worklist
 
   -- Register a parse state and decide whether we have to process it.
-  convert :: (a, ParseState' r t) -> State (PTGenState' r t) (Maybe (ParseState' r t), (a, PState))
+  convert :: (a, ParseState' x r t) -> State (PTGenState' x r t) (Maybe (ParseState' x r t), (a, PState))
   convert (a, is) = do
     let k = lr0state is
     snew <- use stNext
@@ -457,12 +465,12 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
 -- | Shift over reduce.
 --   First reduce action out of several ones.
 
-chooseAction :: ISRAction' r t -> Maybe (Either PState (Rule' r t))
+chooseAction :: ISRAction' x r t -> Maybe (Either PState (Rule' x r t))
 chooseAction (ISRAction (Just s) rs) = Just (Left s)
 chooseAction (ISRAction Nothing  rs) = Right <$> do listToMaybe $ Set.toList rs
 
 -- | Construct the extensional parse table.
-constructParseTable' :: forall x r t. (Ord r, Ord t) => IPT' r t -> ParseTable' r t PState
+constructParseTable' :: forall x r t. (Ord r, Ord t) => IPT' x r t -> ParseTable' x r t PState
 constructParseTable' (IPT sr goto) = ParseTable tabSR tabGoto tabInit
   where
   tabSR s Nothing  = chooseAction =<< do view iactEof <$> IntMap.lookup s sr
@@ -471,7 +479,7 @@ constructParseTable' (IPT sr goto) = ParseTable tabSR tabGoto tabInit
   tabInit = 0
 
 -- | Construct the extensional parse table.
-constructParseTable :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> ParseTable' r t PState
+constructParseTable :: forall x r t. (Ord r, Ord t) => EGrammar' x r t -> ParseTable' x r t PState
 constructParseTable = constructParseTable' . ptGen
 
 -- | Add rule @%start -> S@ for new start symbol.
@@ -480,5 +488,5 @@ addNewStart x r (EGrammar grm start fs) = EGrammar (add grm) newstart fs
   where
   add = over grmNTDefs $ IntMap.insert (ntNum newstart) $
           NTDef x $ [Alt r $ Form [NonTerm start]]
-  newstart :: NT' r
-  newstart = NT (0-1) r
+  newstart :: NT' x
+  newstart = NT (0-1) x
