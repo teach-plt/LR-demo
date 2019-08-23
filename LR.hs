@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 -- {-# LANGUAGE TemplateHaskell #-}
 
@@ -80,7 +81,7 @@ run s = do
   let ipt  = ptGen egrm
 
   putStrLn "Generated parse table:"
-  putStrLn $ debugPrint ipt
+  putStrLn $ debugPrint $ WithNTNames @A.Ident (getNTNames egrm) ipt
 
   let pt   = constructParseTable' ipt
 

@@ -98,6 +98,36 @@ instance (Show x, Eq x) => Semigroup (NTDef' x r t) where
     | otherwise = error $ unwords $
        [ "non-terminal names do not match:" ] ++ map show [x, x']
 
+-- ** Converting 'NTId' back to name.
+
+-- | Decoration of something with a NT printing dictionary.
+
+data WithNTNames x a = WithNTNames
+  { _wntNames :: IntMap x               -- ^ Number-to-names map for non-terminals.
+  , _wntThing :: a                      -- ^ The decorated thing.
+  }
+
+makeLenses ''WithNTNames
+
+class GetNTNames x a where
+  getNTNames :: a -> IntMap x
+
+instance GetNTNames x (WithNTNames x a) where
+  getNTNames = (^. wntNames)
+
+instance GetNTNames x (Grammar' x r t) where
+  getNTNames g = (^. ntName) <$> g ^. grmNTDefs
+
+-- class GetNTName x a where
+--   getNTName :: a -> NTId -> x
+
+-- instance GetNTName x (Grammar' x r t) where
+--   getNTName g i = ((g ^. grmNTDefs) IntMap.! i) ^. ntName
+
+-- instance GetNTName x (WithNTNames x a) where
+--   getNTName w i = (w ^. wntNames) IntMap.! i
+
+
 -- * Generic grammar folds.
 
 -- The class-based approach did not go well with Haskell's
@@ -285,3 +315,5 @@ makeLenses ''EGrammar'
 makeEGrammar :: Ord t => Grammar' x r t -> NT' x -> EGrammar' x r t
 makeEGrammar grm start = EGrammar grm start $ computeFirst grm
 
+instance GetNTNames x (EGrammar' x r t) where
+  getNTNames = getNTNames . _eGrm

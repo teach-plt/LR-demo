@@ -94,3 +94,22 @@ instance (DebugPrint x, DebugPrint r, DebugPrint t) => DebugPrint (ParseItem' x 
 instance (DebugPrint x, DebugPrint r, DebugPrint t) => DebugPrint (ParseState' x r t) where
   debugPrint (ParseState m) = unlines $
     map (\ (item, ls) -> unwords [ debugPrint item, debugPrint ls ]) $ Map.toList m
+
+---------------------------------------------------------------------------
+-- Pretty printing of NTs using WithNTNames dictionary:
+
+instance (DebugPrint x) => DebugPrint (WithNTNames x IGotoActions) where
+  debugPrint (WithNTNames dict gotos) = unlines $ map ("\t" ++) $ map row $ IntMap.toList gotos
+    where
+    row (i, s) = unwords [ debugPrint (dict IntMap.! i), "\tgoto state", show s ]
+
+instance (Ord r, Ord t, DebugPrint x, DebugPrint r, DebugPrint t) => DebugPrint (WithNTNames x (IPT' x r t)) where
+  debugPrint (WithNTNames dict (IPT sr goto)) = unlines $ concat $ (`map` srgoto) $ \ (s, ls) ->
+      [ unwords [ "State", show s ]
+      , ""
+      , ls
+      ]
+    where
+    sr'    = map (second debugPrint) $ IntMap.toList sr
+    goto'  = map (second $ debugPrint . WithNTNames dict) $ IntMap.toList goto
+    srgoto = IntMap.toList $ IntMap.fromListWith (\ s g -> unlines [s,g]) $ goto' ++ sr'
