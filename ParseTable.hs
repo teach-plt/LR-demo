@@ -117,8 +117,8 @@ runShiftReduceParser nextAction input = loop $ SRState (Stack []) input
 --   If 'Nothing' is returned, the parser halts.
 
 data ParseTable' x r t s = ParseTable
-  { _tabSR   :: s -> Maybe t -> Maybe (Either s (Rule' x r t))
-  , _tabGoto :: s -> NT' x   -> Maybe s
+  { _tabSR   :: s -> Maybe t -> Maybe (Either s (Rule' x r t))  -- ^ S/R-action on terminals.
+  , _tabGoto :: s -> NT' x   -> Maybe s                         -- ^ Goto-action on reduction result.
   , _tabInit :: s
   }
 makeLenses ''ParseTable'
@@ -140,7 +140,7 @@ lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
     -- Shift action:
     Left s -> do
       -- Put new state on top of stack
-      modify (List1.cons s)
+      modify $ List1.cons s
       return Shift
     -- Reduce action:
     Right rule@(Rule x (Alt _ (Form alpha))) -> do
@@ -148,7 +148,7 @@ lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
       let n = length alpha
       let (ss1, rest) = List1.splitAt n ss
       -- Rest should be non-empty, otherwise internal error.
-      let err = error $ "lr1Control: control stack to short to reduce"
+      let err = error $ "lr1Control: control stack too short to reduce"
       let ss2 = fromMaybe err $ List1.nonEmpty rest
       -- Execute the goto action (if present)
       s <- MaybeT $ return $ tabGoto (List1.head ss2) x
@@ -163,7 +163,7 @@ runLR1Parser pt@(ParseTable _ _ s0) input =
   where
   control = lr1Control pt
 
--- LR(1) parsetable generation.
+-- * LR(1) parsetable generation.
 
 -- | A parse item is a dotted rule X → α.β.
 
@@ -237,45 +237,16 @@ completeStep (EGrammar (Grammar _ _ ntDefs) _ fs) (ParseState is) =
         -- Item is old, maybe lookahead is new?
         Just old -> unless (SetMaybe.isSubsetOf new old) $ lift dirty
 
--- complete :: forall x r t. (Ord r, Ord t)
---   => EGrammar' x r t
---   -> ParseState' r t
---   -> ParseState' r t
--- complete (EGrammar (Grammar _ _ ntDefs) _ fs) = saturate step
---   where
---   step :: ParseState' r t -> Change (ParseState' r t)
---   step (ParseState is) = mapM_ add
---       [ (ParseItem (Rule y alt) gamma, la')
---       | (ParseItem _ (NonTerm y : beta), la) <- Map.toList is
---       , NTDef _ alts                         <- maybeToList $ IntMap.lookup (ntNum y) ntDefs
---       , alt@(Alt _ (Form gamma))             <- alts
---       , let la' = getFirst $ concatFirst (firstSet fs $ Form beta) $ First la
---       ]
---       `execStateT` ParseState is
---     where
---     -- Add a parse item candidate.
---     add :: (ParseItem' r t, Lookahead t) -> StateT (ParseState' r t) Change ()
---     add (k, new) = do
---       ParseState st <- get
---       let (mv, st') = Map.insertLookupWithKey (\ _ -> SetMaybe.union) k new st
---       put $ ParseState st'
---       -- Detect change:
---       case mv of
---         -- Item is new?
---         Nothing -> lift dirty
---         -- Item is old, maybe lookahead is new?
---         Just old -> unless (SetMaybe.isSubsetOf old new) $ lift dirty
 
 -- | Goto action for a parse state.
 
--- successors :: ParseState' r t -> (Map (Term t) (ParseState' r t), IntMap (ParseState' r t))
 successors :: (Ord r, Ord t) => EGrammar' x r t -> ParseState' x r t -> Map (Symbol' x t) (ParseState' x r t)
 successors grm (ParseState is) = complete grm <$> Map.fromListWith (<>)
   [ (sy, ParseState $ Map.singleton (ParseItem r alpha) la)
   | (ParseItem r (sy : alpha), la) <- Map.toList is
   ]
 
--- ParseState dictionary
+-- * ParseState dictionary
 
 type PState = Int
 
@@ -289,10 +260,10 @@ type LR0State' x r t = Set (ParseItem' x r t)
 lr0state :: ParseState' x r t -> LR0State' x r t
 lr0state (ParseState is) = Map.keysSet is
 
--- The dictionary maps LR0 states to state numbers and their best decoration.
+-- | The dictionary maps LR0 states to state numbers and their best decoration.
 type PSDict' x r t = Map (LR0State' x r t) (PState, ParseState' x r t)
 
--- Internal parse table
+-- | Internal parse table.
 
 data IPT' x r t = IPT
   { _iptSR   :: IntMap (ISRActions' x r t)  -- ^ Map from states to shift-reduce actions.
@@ -361,7 +332,7 @@ reductions (ParseState is) = mconcat
     , let ra = reduceAction r
     ]
 
--- Parse table generator state
+-- | Parse table generator state
 
 data PTGenState' x r t = PTGenState
   { _stNext   :: Int              -- ^ Next unused state number.
