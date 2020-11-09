@@ -1,6 +1,15 @@
 .PHONY: LRtest CYKtest TAGS
 
-LRfiles=LR.hs CFG.hs CharacterTokenGrammar.hs DebugPrint.hs ParseTable.hs ParseTable/Pretty.hs SetMaybe.hs Saturation.hs Util.hs
+LRfiles = \
+  LR.hs \
+  CFG.hs \
+  CharacterTokenGrammar.hs \
+  DebugPrint.hs \
+  ParseTable.hs \
+  ParseTable/Pretty.hs \
+  SetMaybe.hs \
+  Saturation.hs \
+  Util.hs
 
 default: LR LRtest
 
@@ -36,10 +45,10 @@ LR : % : %.hs LBNF/Test $(LRfiles)
 LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf
 	bnfc --haskell -d $<
 
-LBNF/Par.hs: LBNF/Par.y
+%.hs: %.y
 	happy -gcai $<
 
-LBNF/Lex.hs: LBNF/Lex.x
+%.hs: %.x
 	alex -g $<
 
 LBNF/Test: LBNF/Test.hs LBNF/Par.hs LBNF/Lex.hs
