@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 -- {-# LANGUAGE TemplateHaskell #-}
@@ -35,7 +36,7 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
-import LBNF.ErrM (Err(Ok, Bad))
+import LBNF.ErrM (Err, pattern Ok, pattern Bad)
 
 import DebugPrint
 import Util
