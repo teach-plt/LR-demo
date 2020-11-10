@@ -76,15 +76,21 @@ run s = do
     Just start -> Right start
     Nothing    -> Left "grammar is empty!"
 
-  putStrLn "Using the following grammar:"
-  putStrLn $ printTree $ reifyGrammar grm
+  putStrLn $ unlines
+    [ "Using the following grammar:"
+    , ""
+    , printTree $ reifyGrammar grm
+    ]
 
   let newstart = A.Ident "%start"
   let egrm = addNewStart newstart newstart $ makeEGrammar grm start
   let ipt  = ptGen egrm
 
-  putStrLn "Generated parse table:"
-  putStrLn $ debugPrint $ WithNTNames @A.Ident (getNTNames egrm) ipt
+  putStrLn $ unlines
+    [ "Generated parse table:"
+    , ""
+    , debugPrint $ WithNTNames @A.Ident (getNTNames egrm) ipt
+    ]
 
   let pt   = constructParseTable' ipt
 

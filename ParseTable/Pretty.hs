@@ -64,9 +64,9 @@ instance DebugPrint IGotoActions where
 
 instance (DebugPrint x, DebugPrint r, DebugPrint t) => DebugPrint (ISRAction' x r t) where
   debugPrint (ISRAction mshift rs) = intercalate ";" $ filter (not . null) $
-    [ maybe "" (\ s -> unwords [ "shift to", show s ]) mshift
+    [ maybe "" (\ s -> unwords [ "shift to state", show s ]) mshift
     , if null rs then ""
-      else unwords [ "reduce with", intercalate " or " $ map debugPrint $ Set.toList rs ]
+      else unwords [ "reduce with rule", intercalate " or " $ map debugPrint $ Set.toList rs ]
     ]
 
 instance (Ord r, Ord t, DebugPrint x, DebugPrint r, DebugPrint t) => DebugPrint (ISRActions' x r t) where
