@@ -1,8 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 -- {-# LANGUAGE TemplateHaskell #-}
+
+module CYK where
 
 import Control.Monad.Except
 import Control.Monad.State
@@ -32,7 +35,7 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
-import LBNF.ErrM (Err(Ok, Bad))
+import LBNF.ErrM (Err, pattern Ok, pattern Bad)
 
 import CFG
 import CharacterTokenGrammar
@@ -60,7 +63,7 @@ run s = do
     pGrammar (myLexer s)
 
   -- Scope-check grammar and convert into internal format.
-  grm  <- runM $ checkGrammar tree
+  grm  <- snd <$> do runM $ checkGrammar tree
 
   putStrLn "Using the following grammar:"
   putStrLn $ printTree $ reifyGrammar grm
@@ -104,12 +107,12 @@ checkGuardedness grm@(Grammar n dict defs) = do
   let gs = computeGuardedness grm
   unless (all getGuarded gs) $ do
     let is = mapMaybe (\ (i, g) -> if getGuarded g then Nothing else Just i) $ IntMap.toList gs
-    let us = map (printTree . ntToIdent grm) is
+    let us = map show is -- FIXME: map (printTree . ntToIdent grm) is
     throwError $ "ungarded non-terminals in grammar: " ++ unwords us
 
 reportNullable :: Grammar -> IntMap Nullable -> IO ()
 reportNullable grm nullability = do
-  let ns = map (printTree . ntToIdent grm)
+  let ns = map show -- FIXME: map (printTree . ntToIdent grm)
          $ mapMaybe (\ (i, Nullable n) -> if n then Just i else Nothing)
          $ IntMap.toList nullability
   unless (null ns) $

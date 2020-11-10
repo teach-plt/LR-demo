@@ -8,34 +8,36 @@
 
 -- | LR-parser.
 
-import Control.Monad.Except
-import Control.Monad.State
-import Control.Monad.Writer (Writer, runWriter, tell)
+module Main where
 
-import qualified Data.Foldable as Fold
-import qualified Data.List as List
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Set (Set)
-import qualified Data.Set as Set
+-- import Control.Monad.Except
+-- import Control.Monad.State
+-- import Control.Monad.Writer (Writer, runWriter, tell)
 
-import Data.Maybe (mapMaybe)
-import Data.Monoid (Any(..))
-import Data.Tuple (swap)
+-- import qualified Data.Foldable as Fold
+-- import qualified Data.List as List
+-- import Data.IntMap (IntMap)
+-- import qualified Data.IntMap as IntMap
+-- import Data.Map (Map)
+-- import qualified Data.Map as Map
+-- import Data.Set (Set)
+-- import qualified Data.Set as Set
+
+-- import Data.Maybe (mapMaybe)
+-- import Data.Monoid (Any(..))
+-- import Data.Tuple (swap)
 
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 
--- uses microlens-platform
-import Lens.Micro
-import Lens.Micro.Extras (view)
-import Lens.Micro.TH (makeLenses)
+-- -- uses microlens-platform
+-- import Lens.Micro
+-- import Lens.Micro.Extras (view)
+-- import Lens.Micro.TH (makeLenses)
 
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
-import LBNF.Print (Print, printTree)
+import LBNF.Print (printTree)
 import LBNF.ErrM (Err, pattern Ok, pattern Bad)
 
 import DebugPrint

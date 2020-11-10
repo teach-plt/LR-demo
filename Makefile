@@ -36,10 +36,10 @@ CYKtest/% : test/%.cf test/%.txt CYK
 CYKtest/fail/% : test/fail/%.cf test/fail/%.txt CYK
 	! ./CYK $(word 1,$^) < $(word 2,$^)
 
-CYK : % : %.hs LBNF/Test
+CYK : % : %.hs LBNF/Lex.hs LBNF/Par.hs
 	ghc --make $< -o $@
 
-LR : % : %.hs LBNF/Test $(LRfiles)
+LR : % : %.hs LBNF/Lex.hs LBNF/Par.hs $(LRfiles)
 	ghc --make $< -o $@
 
 LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf

@@ -1,6 +1,8 @@
 -- Generate LR parser for:
 -- S ::= S ">" ;
 
+module BugLRec where
+
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Map (Map)
