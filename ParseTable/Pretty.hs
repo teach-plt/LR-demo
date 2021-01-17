@@ -6,8 +6,7 @@
 
 module ParseTable.Pretty where
 
-import Control.Arrow (first, second)
-
+import Data.Bifunctor (first, second)
 import Data.List (intercalate)
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as List1

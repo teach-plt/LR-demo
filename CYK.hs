@@ -35,7 +35,6 @@ import Lens.Micro.TH (makeLenses)
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (Print, printTree)
-import LBNF.ErrM (Err, pattern Ok, pattern Bad)
 
 import CFG
 import CharacterTokenGrammar
@@ -80,19 +79,15 @@ run s = do
   runM $ parseWith grm stdin
   putStrLn "Parse successful!"
 
-type M = Either String
+type Err = Either String
 
-runM :: M a -> IO a
-runM = \case
-  Right a -> return a
-  Left err -> do
-    putStrLn $ "Error: " ++ err
-    exitFailure
+runM :: Err a -> IO a
+runM = runErr $ return ()
 
 runErr :: IO () ->  Err a -> IO a
 runErr preErr = \case
-  Ok a -> return a
-  Bad err -> do
+  Right a -> return a
+  Left err -> do
     preErr
     putStrLn $ "Error: " ++ err
     exitFailure
@@ -102,7 +97,7 @@ runErr preErr = \case
 --   or
 --   A → B, B → A.
 
-checkGuardedness :: Grammar -> M ()
+checkGuardedness :: Grammar -> Err ()
 checkGuardedness grm@(Grammar n dict defs) = do
   let gs = computeGuardedness grm
   unless (all getGuarded gs) $ do
@@ -189,5 +184,5 @@ class Nullable a where
 
 -- | CYK-like parser (does not do optimal sharing if grammar not in 2NF).
 
-parseWith :: Grammar -> String -> M ()
+parseWith :: Grammar -> String -> Err ()
 parseWith grm inp = throwError "NYI: CYK parser"

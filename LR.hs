@@ -38,7 +38,6 @@ import System.Exit (exitFailure)
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
 import LBNF.Print (printTree)
-import LBNF.ErrM (Err, pattern Ok, pattern Bad)
 
 import DebugPrint
 import Util
@@ -101,19 +100,15 @@ run s = do
   -- putStrLn "Parse successful!"
   putStrLn $ debugPrint $ runLR1Parser pt stdin
 
-type M = Either String
+type Err = Either String
 
-runM :: M a -> IO a
-runM = \case
+runM :: Err a -> IO a
+runM = runErr $ return ()
+
+runErr :: IO () -> Err a -> IO a
+runErr preErr = \case
   Right a -> return a
   Left err -> do
-    putStrLn $ "Error: " ++ err
-    exitFailure
-
-runErr :: IO () ->  Err a -> IO a
-runErr preErr = \case
-  Ok a -> return a
-  Bad err -> do
     preErr
     putStrLn $ "Error: " ++ err
     exitFailure

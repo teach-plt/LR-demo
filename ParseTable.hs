@@ -9,7 +9,6 @@
 
 module ParseTable where
 
-import Control.Arrow (first, second)
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -24,6 +23,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Data.Bifunctor (first, second)
 import Data.Function (on)
 import Data.Maybe (catMaybes, maybeToList, listToMaybe, fromMaybe)
 import Data.Either (partitionEithers)
