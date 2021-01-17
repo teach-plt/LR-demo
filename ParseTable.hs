@@ -27,6 +27,7 @@ import Data.Bifunctor (first, second)
 import Data.Function (on)
 import Data.Maybe (catMaybes, maybeToList, listToMaybe, fromMaybe)
 import Data.Either (partitionEithers)
+import Data.Semigroup (Semigroup(..))
 
 -- uses microlens-platform
 import Lens.Micro

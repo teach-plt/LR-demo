@@ -5,18 +5,17 @@ license:   BSD-3-Clause
 author:    Andreas Abel <andreas.abel@gu.se>
 category:  Parsing
 
-tested-with: GHC == 7.0.4
-           , GHC == 7.2.2
-           , GHC == 7.4.2
-           , GHC == 7.6.3
-           , GHC == 7.8.4
-           , GHC == 7.10.3
-           , GHC == 8.0.2
-           , GHC == 8.2.2
-           , GHC == 8.4.4
-           , GHC == 8.6.5
-           , GHC == 8.8.4
-           , GHC == 8.10.2
+# hpack version
+spec-version: 0.34.3
+
+# LR.hs uses TypeApplications (from ghc 8.0)
+tested-with:
+  - GHC == 8.0.2
+  - GHC == 8.2.2
+  - GHC == 8.4.4
+  - GHC == 8.6.5
+  - GHC == 8.8.4
+  - GHC == 8.10.3
 
 dependencies:
   - base >= 4.3 && < 5
@@ -27,14 +26,29 @@ dependencies:
   - mtl
   - transformers
 
-ghc-options: -Wall
+# ghc-options: -Wall
 
 source-dirs: .
 
 executables:
   LR:
     main: LR.hs
+    # Try: exclude some files according to recipe https://github.com/sol/hpack/issues/409
+    # Does not work with hpack 0.34.3
+    when:
+      condition: false
+      other-modules:
+        BugLRec
+        CYK
+        LBNF.ErrM
+        LBNF.Skel
+        LBNF.Test
   # BugLRec:
   #   main: BugLRec.hs
   # CYK:
   #   main: CYK.hs
+
+# Excluding could be possible if issue sol/hpack#402 is implemented
+# when:
+#   - condition: false
+#     other-modules: BugLRec CYK

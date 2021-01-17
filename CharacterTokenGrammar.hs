@@ -20,6 +20,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Data.Maybe
+import Data.Semigroup ((<>))
 
 -- uses microlens-platform
 import Lens.Micro

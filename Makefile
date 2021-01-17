@@ -13,6 +13,18 @@ LRfiles = \
 
 default: LR LRtest
 
+.PHONY: build
+build: LR-demo.cabal
+	cabal build
+
+## Infrastructure
+
+.PRECIOUS: LR-demo.cabal
+LR-demo.cabal : package.yaml
+	hpack $<
+
+## Testing
+
 cyk : CYK CYKtest
 
 CYKtest : \
@@ -22,7 +34,8 @@ CYKtest : \
 LRtest : \
   LRtest/BalancedParentheses \
   LRtest/LogicalExpressions \
-  LRtest/RRecLRec
+  LRtest/RRecLRec \
+  LRtest/ExpPlusTimes
 
 LRtest/% : test/%.cf test/%.txt LR
 	./LR $(word 1,$^) < $(word 2,$^)
@@ -36,11 +49,15 @@ CYKtest/% : test/%.cf test/%.txt CYK
 CYKtest/fail/% : test/fail/%.cf test/fail/%.txt CYK
 	! ./CYK $(word 1,$^) < $(word 2,$^)
 
+## Binaries
+
 CYK : % : %.hs LBNF/Lex.hs LBNF/Par.hs
 	ghc --make $< -o $@
 
 LR : % : %.hs LBNF/Lex.hs LBNF/Par.hs $(LRfiles)
 	ghc --make $< -o $@
+
+## BNFC
 
 LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf
 	bnfc --haskell -d $<
@@ -52,12 +69,14 @@ LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf
 	alex -g $<
 
 LBNF/Test: LBNF/Test.hs LBNF/Par.hs LBNF/Lex.hs
-	ghc --make $< -o $@
+	ghc --make $< -main-is LBNF.Test -o $@
 
 pack : CYK.tgz
 
 CYK.tgz : LBNF.cf LBNF/*.hs LBNF/*.x LBNF/*.y CYK.hs Makefile
 	tar czf $@ $^
+
+## Misc
 
 TAGS :
 	hasktags --etags $(LRfiles)
