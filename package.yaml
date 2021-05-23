@@ -19,7 +19,7 @@ tested-with:
   - GHC == 9.0.1
 
 dependencies:
-  - base >= 4.3 && < 5
+  - base >= 4.9 && < 5
   - array
   - containers
   - microlens

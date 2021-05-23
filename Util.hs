@@ -6,8 +6,8 @@ import Control.Monad.State
 
 import Data.Char
 import Data.List
-import Data.Map (Map)
-import qualified Data.Map as Map
+-- import Data.Map (Map)
+-- import qualified Data.Map as Map
 
 import Lens.Micro
 import Lens.Micro.Extras

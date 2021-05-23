@@ -1,4 +1,7 @@
 -- keep in sync with default-extensions in .cabal / package.yaml file
+
+-- :set -Wall
+
 -- keep in sync the dependencies in .cabal / package.yaml file
 
 :set -package array
