@@ -1,15 +1,17 @@
 .PHONY: LRtest CYKtest TAGS
 
-LRfiles = \
-  LR.hs \
-  CFG.hs \
-  CharacterTokenGrammar.hs \
-  DebugPrint.hs \
-  ParseTable.hs \
-  ParseTable/Pretty.hs \
-  SetMaybe.hs \
-  Saturation.hs \
-  Util.hs
+LRstems = \
+  LR \
+  CFG \
+  CharacterTokenGrammar \
+  DebugPrint \
+  ParseTable \
+  ParseTable/Pretty \
+  SetMaybe \
+  Saturation \
+  Util
+
+LRfiles = $(patsubst %,src/%.hs,$(LRstems))
 
 default: LR LRtest
 
@@ -51,30 +53,22 @@ CYKtest/fail/% : test/fail/%.cf test/fail/%.txt CYK
 
 ## Binaries
 
-CYK : % : %.hs LBNF/Lex.hs LBNF/Par.hs
-	ghc --make $< -o $@
+CYK : main-cyk/CYK.hs src/LBNF/Lex.hs src/LBNF/Par.hs
+	ghc -isrc -imain-cyk -main-is CYK --make $< -o $@
 
-LR : % : %.hs LBNF/Lex.hs LBNF/Par.hs $(LRfiles)
-	ghc --make $< -o $@
-
-## BNFC
-
-LBNF/Test.hs LBNF/Lex.x LBNF/Layout.hs LBNF/Par.y : LBNF.cf
-	bnfc --haskell -d $<
-
-%.hs: %.y
-	happy -gcai $<
-
-%.hs: %.x
-	alex -g $<
-
-LBNF/Test: LBNF/Test.hs LBNF/Par.hs LBNF/Lex.hs
-	ghc --make $< -main-is LBNF.Test -o $@
+LR : lr-demo/Main.hs src/LBNF/Lex.hs src/LBNF/Par.hs $(LRfiles)
+	ghc -isrc -ilr-demo --make $< -o $@
 
 pack : CYK.tgz
 
-CYK.tgz : LBNF.cf LBNF/*.hs LBNF/*.x LBNF/*.y CYK.hs Makefile
+CYK.tgz : src/LBNF.cf src/LBNF/*.hs src/LBNF/*.x src/LBNF/*.y CYK.hs Makefile
 	tar czf $@ $^
+
+## BNFC-generated files
+
+src/LBNF/Abs.hs src/LBNF/Lex.x src/LBNF/Par.y \
+                src/LBNF/Lex.hs src/LBNF/Par.hs src/LBNF/Print.hs : src/LBNF.cf
+	make -C src
 
 ## Misc
 
@@ -82,10 +76,10 @@ TAGS :
 	hasktags --etags $(LRfiles)
 
 clean:
-	-rm -f LBNF/*.log LBNF/*.aux LBNF/*.hi LBNF/*.o LBNF/*.dvi *.dyn_o *.dyn_hi *.hi *.o *~
+	-rm -f src/LBNF/*.log src/LBNF/*.aux src/LBNF/*.hi src/LBNF/*.o src/LBNF/*.dvi *.dyn_o *.dyn_hi *.hi *.o *~
 
 distclean: clean
-	-rm -f LBNF/Doc.* LBNF/Lex.* LBNF/Par.* LBNF/Layout.* LBNF/Skel.* LBNF/Print.* LBNF/Test.* LBNF/Abs.* LBNF/Test LBNF/ErrM.* LBNF/SharedString.* LBNF/ComposOp.* LBNF/LBNF.dtd LBNF/XML.*
-	-rmdir -p LBNF/
+	-rm -f src/LBNF/Doc.* src/LBNF/Lex.* src/LBNF/Par.* src/LBNF/Layout.* src/LBNF/Skel.* src/LBNF/Print.* src/LBNF/Test.* src/LBNF/Abs.* src/LBNF/Test src/LBNF/ErrM.* src/LBNF/SharedString.* src/LBNF/ComposOp.* src/LBNF/src/LBNF.dtd src/LBNF/XML.*
+	-rmdir -p src/LBNF/
 
 # EOF

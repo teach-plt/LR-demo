@@ -29,25 +29,28 @@ dependencies:
 
 # ghc-options: -Wall
 
-source-dirs: .
+library:
+  source-dirs: src
+  # exclude some BNFC-generated files
+  when:
+    condition: false
+    other-modules:
+      - LBNF.ErrM
+      - LBNF.Skel
+      - LBNF.Test
 
 executables:
-  LR:
-    main: LR.hs
-    # Try: exclude some files according to recipe https://github.com/sol/hpack/issues/409
-    # Does not work with hpack 0.34.3
-    when:
-      condition: false
-      other-modules:
-        - BugLRec
-        - CYK
-        - LBNF.ErrM
-        - LBNF.Skel
-        - LBNF.Test
-  # BugLRec:
-  #   main: BugLRec.hs
-  # CYK:
-  #   main: CYK.hs
+  lr-demo:
+    source-dirs:  lr-demo
+    main:         Main.hs
+    dependencies: LR-demo
+
+  cyk:
+    source-dirs:  main-cyk
+    main:         CYK.hs
+    ghc-options:  -main-is CYK
+      # since the module isn't named Main, we have to pass this option
+    dependencies: LR-demo
 
 # Excluding could be possible if issue sol/hpack#402 is implemented
 # when:

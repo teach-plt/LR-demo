@@ -8,7 +8,7 @@
 
 -- | LR-parser.
 
-module Main where
+module LR where
 
 -- import Control.Monad.Except
 -- import Control.Monad.State
