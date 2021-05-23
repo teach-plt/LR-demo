@@ -1,0 +1,9 @@
+-- keep in sync with default-extensions in .cabal / package.yaml file
+-- keep in sync the dependencies in .cabal / package.yaml file
+
+:set -package array
+:set -package containers
+:set -package microlens
+:set -package microlens-th
+:set -package mtl
+:set -package transformers

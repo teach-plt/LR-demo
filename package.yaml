@@ -15,7 +15,8 @@ tested-with:
   - GHC == 8.4.4
   - GHC == 8.6.5
   - GHC == 8.8.4
-  - GHC == 8.10.3
+  - GHC == 8.10.4
+  - GHC == 9.0.1
 
 dependencies:
   - base >= 4.3 && < 5
@@ -38,11 +39,11 @@ executables:
     when:
       condition: false
       other-modules:
-        BugLRec
-        CYK
-        LBNF.ErrM
-        LBNF.Skel
-        LBNF.Test
+        - BugLRec
+        - CYK
+        - LBNF.ErrM
+        - LBNF.Skel
+        - LBNF.Test
   # BugLRec:
   #   main: BugLRec.hs
   # CYK:

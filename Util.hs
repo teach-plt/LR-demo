@@ -13,7 +13,8 @@ import Lens.Micro
 import Lens.Micro.Extras
 
 use :: MonadState s m => Lens s s a a -> m a
-use = gets . view
+use l = gets $ view l
+  -- eta-expanded for GHC-9.0
 
 modifying :: MonadState s m => Lens s s a a -> (a -> a) -> m ()
 modifying l = modify . over l
