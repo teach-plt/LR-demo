@@ -10,6 +10,7 @@
 
 module CharacterTokenGrammar where
 
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
 

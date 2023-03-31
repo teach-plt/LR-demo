@@ -7,6 +7,7 @@
 
 module CYK where
 
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Writer (Writer, runWriter, tell)

@@ -1,5 +1,5 @@
 name:      LR-demo
-version:   0.2019.8.23
+version:   0.2023.3.31
 synopsis:  An LALR parsetable generator and interpreter.
 license:   BSD-3-Clause
 author:    Andreas Abel <andreas.abel@gu.se>
@@ -15,13 +15,16 @@ tested-with:
   - GHC == 8.4.4
   - GHC == 8.6.5
   - GHC == 8.8.4
-  - GHC == 8.10.4
-  - GHC == 9.0.1
+  - GHC == 8.10.7
+  - GHC == 9.0.2
+  - GHC == 9.2.7
+  - GHC == 9.4.4
 
 dependencies:
   - base >= 4.9 && < 5
   - array
-  - containers
+  - containers >= 0.5.9
+      # Set.lookupMin needs containers-0.5.9
   - microlens
   - microlens-th
   - mtl

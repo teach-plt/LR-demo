@@ -9,6 +9,7 @@
 
 module ParseTable where
 
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -160,9 +161,10 @@ lr1Control (ParseTable tabSR tabGoto _) (SRState stk input) = do
 
 runLR1Parser :: (Eq t) => ParseTable' x r t s -> Input' t -> Trace' x r t
 runLR1Parser pt@(ParseTable _ _ s0) input =
-  runShiftReduceParser control input `evalState` (s0 List1.:| [])
+  runShiftReduceParser control input `evalState` st
   where
   control = lr1Control pt
+  st = s0 List1.:| []  -- List1.singleton only available from base-4.15 (GHC 9.0)
 
 -- * LR(1) parsetable generation.
 
@@ -439,7 +441,7 @@ ptGen grm@(EGrammar (Grammar _ _ ntDefs) start fs) =
 
 chooseAction :: ISRAction' x r t -> Maybe (Either PState (Rule' x r t))
 chooseAction (ISRAction (Just s) rs) = Just (Left s)
-chooseAction (ISRAction Nothing  rs) = Right <$> do listToMaybe $ Set.toList rs
+chooseAction (ISRAction Nothing  rs) = Right <$> Set.lookupMin rs
 
 -- | Construct the extensional parse table.
 constructParseTable' :: forall x r t. (Ord r, Ord t) => IPT' x r t -> ParseTable' x r t PState
