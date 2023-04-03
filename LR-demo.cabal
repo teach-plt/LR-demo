@@ -1,0 +1,70 @@
+cabal-version: 2.2
+
+name:           LR-demo
+version:        0.2023.4.3
+synopsis:       An LALR parsetable generator and interpreter.
+category:       Parsing
+author:         Andreas Abel <andreas.abel@gu.se>
+maintainer:     Andreas Abel <andreas.abel@gu.se>
+license:        BSD-3-Clause
+build-type:     Simple
+tested-with:
+    GHC == 9.6.1
+    GHC == 9.4.4
+    GHC == 9.2.7
+    GHC == 9.0.2
+    GHC == 8.10.7
+    GHC == 8.8.4
+    GHC == 8.6.5
+    GHC == 8.4.4
+    GHC == 8.2.2
+    GHC == 8.0.2
+
+library
+  exposed-modules:
+      CFG
+      CharacterTokenGrammar
+      DebugPrint
+      LBNF.Abs
+      LBNF.Lex
+      LBNF.Par
+      LBNF.Print
+      LR
+      ParseTable
+      ParseTable.Pretty
+      Saturation
+      SetMaybe
+      Util
+  other-modules:
+      Paths_LR_demo
+  autogen-modules:
+      Paths_LR_demo
+  hs-source-dirs:
+      src
+  build-depends:
+      array
+    , base >=4.9 && <5
+    , containers
+    , microlens
+    , microlens-th
+    , mtl
+    , transformers
+  default-language: Haskell2010
+
+executable cyk
+  main-is:          CYK.hs
+  hs-source-dirs:   main-cyk
+  ghc-options:      -main-is CYK
+  build-depends:
+      LR-demo
+    , base
+    , containers
+    , mtl
+    , transformers
+  default-language: Haskell2010
+
+executable lr-demo
+  hs-source-dirs:   lr-demo
+  main-is:          Main.hs
+  build-depends:    LR-demo
+  default-language: Haskell2010

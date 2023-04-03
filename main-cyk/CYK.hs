@@ -3,35 +3,23 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
--- {-# LANGUAGE TemplateHaskell #-}
 
 module CYK where
 
 import Control.Monad
 import Control.Monad.Except
-import Control.Monad.State
 import Control.Monad.Writer (Writer, runWriter, tell)
 
-import qualified Data.Foldable as Fold
-import qualified Data.List as List
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
-import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Data.Maybe (mapMaybe)
 import Data.Monoid (Any(..))
-import Data.Tuple (swap)
 
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
-
--- uses microlens-platform
-import Lens.Micro
-import Lens.Micro.Extras (view)
-import Lens.Micro.TH (makeLenses)
 
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
