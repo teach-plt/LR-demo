@@ -30,8 +30,12 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [file] -> run =<< readFile file
-    _      -> do
+    ["--help"] -> usage
+    ["-h"]     -> usage
+    [file]     -> run =<< readFile file
+    _          -> usage
+  where
+    usage = do
       putStrLn "Usage: LR <file.cf>"
       putStrLn "Parses stdin with the grammar given in the LBNF <file.cf>"
       exitFailure
