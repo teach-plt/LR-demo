@@ -118,14 +118,3 @@ runErr preErr = \case
     preErr
     putStrLn $ "Error: " ++ err
     exitFailure
-
-
--- -- | LR(1) parser.
-
--- parseWith :: ParseTable -> String -> M ()
--- parseWith grm inp = throwError "NYI: LR parser"
-
--- type Input = Input' Term
-
--- instance DebugPrint Input where
---   debugPrint = id

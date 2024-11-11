@@ -2,7 +2,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 
--- {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -117,15 +116,6 @@ instance GetNTNames x (WithNTNames x a) where
 
 instance GetNTNames x (Grammar' x r t) where
   getNTNames g = (^. ntName) <$> g ^. grmNTDefs
-
--- class GetNTName x a where
---   getNTName :: a -> NTId -> x
-
--- instance GetNTName x (Grammar' x r t) where
---   getNTName g i = ((g ^. grmNTDefs) IntMap.! i) ^. ntName
-
--- instance GetNTName x (WithNTNames x a) where
---   getNTName w i = (w ^. wntNames) IntMap.! i
 
 
 -- * Generic grammar folds.

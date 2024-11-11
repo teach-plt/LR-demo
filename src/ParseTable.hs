@@ -184,17 +184,6 @@ type Lookahead t = SetMaybe t  -- ^ The set of lookahead symbols.
 newtype ParseState' x r t = ParseState { theParseState :: Map (ParseItem' x r t) (Lookahead t) }
   deriving (Eq, Ord, Show)
 
--- fullyEqual :: (Eq r, Eq t) => ParseState' r t -> ParseState' r t -> Bool
--- fullyEqual (ParseState is) (ParseState is') = is == is'
-
--- -- | LALR: ignore the lookahead: fuse states with same items.
-
--- instance (Eq r, Eq t) => Eq (ParseState' r t) where
---   (==) = (==) `on` (Map.keysSet . theParseState)
-
--- instance (Ord r, Ord t) => Ord (ParseState' r t) where
---   compare = compare `on` (Map.keysSet . theParseState)
-
 instance (Ord r, Ord t) => Semigroup (ParseState' x r t) where
   ParseState is <> ParseState is' = ParseState $ Map.unionWith SetMaybe.union is is'
 
