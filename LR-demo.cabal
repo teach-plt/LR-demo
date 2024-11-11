@@ -7,7 +7,8 @@ category:       Parsing
 author:         Andreas Abel <andreas.abel@gu.se>
 maintainer:     Andreas Abel <andreas.abel@gu.se>
 license:        BSD-3-Clause
-build-type:     Simple
+build-type:     Custom
+
 tested-with:
     GHC == 9.12.0
     GHC == 9.10.1
@@ -20,8 +21,17 @@ tested-with:
     GHC == 8.8.4
     GHC == 8.6.5
     GHC == 8.4.4
-    GHC == 8.2.2
-    GHC == 8.0.2
+
+custom-setup
+  setup-depends:
+      Cabal   >= 2.2   && < 4
+        -- Distribution.Simple.BuildPaths.autogenPackageModulesDir is new in Cabal-2.0
+        -- We use cabal-version: 2.2, so also Cabal >= 2.2 for the sake of Stack.
+    , base    >= 4.11  && < 5
+        -- Restrict to GHC >= 8.4 which ships Cabal-2.2 (otherwise Cabal has to be reinstalled)
+    , process
+    -- Adding BNFC here does not help because that only provides the BNFC _library_,
+    -- not the _executable that_ we call from 'Setup.hs'.
 
 library
   exposed-modules:
@@ -38,32 +48,27 @@ library
       Saturation
       SetMaybe
       Util
-  other-modules:
       Paths_LR_demo
   autogen-modules:
+      LBNF.Abs
+      LBNF.Lex
+      LBNF.Par
+      LBNF.Print
       Paths_LR_demo
   hs-source-dirs:
       src
   build-depends:
       array
-    , base >=4.9 && <5
+    , base >=4.11 && <5
     , containers
     , microlens
     , microlens-th
     , mtl
     , transformers
-  default-language: Haskell2010
-
-executable cyk
-  main-is:          CYK.hs
-  hs-source-dirs:   main-cyk
-  ghc-options:      -main-is CYK
-  build-depends:
-      LR-demo
-    , base
-    , containers
-    , mtl
-    , transformers
+  build-tool-depends:
+      BNFC:bnfc
+    , alex:alex
+    , happy:happy
   default-language: Haskell2010
 
 executable lr-demo
@@ -71,3 +76,15 @@ executable lr-demo
   main-is:          Main.hs
   build-depends:    LR-demo
   default-language: Haskell2010
+
+-- executable cyk
+--   main-is:          CYK.hs
+--   hs-source-dirs:   main-cyk
+--   ghc-options:      -main-is CYK
+--   build-depends:
+--       LR-demo
+--     , base
+--     , containers
+--     , mtl
+--     , transformers
+--   default-language: Haskell2010
