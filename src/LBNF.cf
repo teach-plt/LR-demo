@@ -1,4 +1,4 @@
--- A grammar for LBNF
+-- A grammar for LBNF (labelled Backus-Naur-Form)
 
 -- A grammar is a list of rules terminated by semicolon.
 
