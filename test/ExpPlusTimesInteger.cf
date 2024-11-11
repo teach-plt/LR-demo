@@ -1,0 +1,11 @@
+-- LR example from the book
+-- Aarne Ranta, "Implementing Programming Languages"
+
+EAdd.  Exp  ::= Exp "+" Exp1;
+EProd. Exp  ::= Exp1;
+EMul.  Exp1 ::= Exp1 "*" Integer;
+EInt.  Exp1 ::= Integer;
+
+I1.    Integer ::= "1";
+I2.    Integer ::= "2";
+I3.    Integer ::= "3";
