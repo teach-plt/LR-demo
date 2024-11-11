@@ -7,6 +7,7 @@ category:       Parsing
 author:         Andreas Abel <andreas.abel@gu.se>
 maintainer:     Andreas Abel <andreas.abel@gu.se>
 license:        BSD-3-Clause
+license-file:   LICENSE
 build-type:     Custom
 
 tested-with:
@@ -38,6 +39,7 @@ library
       CFG
       CharacterTokenGrammar
       DebugPrint
+      License
       LBNF.Abs
       LBNF.Lex
       LBNF.Par
@@ -64,6 +66,7 @@ library
     , microlens
     , microlens-th
     , mtl
+    , string-qq
     , transformers
   build-tool-depends:
       BNFC:bnfc

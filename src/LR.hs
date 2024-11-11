@@ -26,6 +26,7 @@ import CharacterTokenGrammar
 import ParseTable
 import ParseTable.Pretty
 
+import License
 import qualified Paths_LR_demo as Self ( version )
 
 -- | Main: read file passed by only command line argument and call 'run'.
@@ -38,6 +39,7 @@ main = do
     ["-V"]                -> version
     ["--version"]         -> version
     ["--numeric-version"] -> numericVersion
+    ["--license"]         -> printLicense
     ['-':_]               -> usage
     [file]                -> run =<< readFile file
     _                     -> usage
@@ -51,6 +53,7 @@ main = do
         , "  -h | --help        Print this help text."
         , "  -V | --version     Print version info."
         , "  --numeric-version  Print just the version number."
+        , "  --license          Print the license text."
         , "  FILE               Parses stdin with the LBNF grammar given in FILE."
         ]
       exitFailure
@@ -63,6 +66,9 @@ main = do
         ]
     numericVersion = do
       putStrLn ver
+      exitSuccess
+    printLicense = do
+      putStr license
       exitSuccess
 
 -- | Parse grammar and then use it to parse stdin.
