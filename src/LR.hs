@@ -9,8 +9,10 @@
 
 module LR where
 
+import Data.Version                 ( showVersion )
+
 import System.Environment (getArgs)
-import System.Exit (exitFailure)
+import System.Exit (exitFailure, exitSuccess)
 
 import qualified LBNF.Abs as A
 import LBNF.Par (pGrammar, myLexer)
@@ -24,21 +26,44 @@ import CharacterTokenGrammar
 import ParseTable
 import ParseTable.Pretty
 
+import qualified Paths_LR_demo as Self ( version )
+
 -- | Main: read file passed by only command line argument and call 'run'.
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    ["--help"] -> usage
-    ["-h"]     -> usage
-    [file]     -> run =<< readFile file
-    _          -> usage
+  getArgs >>= \case
+    ["-h"]                -> usage
+    ["--help"]            -> usage
+    ["-V"]                -> version
+    ["--version"]         -> version
+    ["--numeric-version"] -> numericVersion
+    ['-':_]               -> usage
+    [file]                -> run =<< readFile file
+    _                     -> usage
   where
+    ver = showVersion Self.version
+    versionLine = unwords [ "lr-demo version", ver, "(C) 2019-24 Andreas Abel" ]
     usage = do
-      putStrLn "Usage: LR <file.cf>"
-      putStrLn "Parses stdin with the grammar given in the LBNF <file.cf>"
+      putStr $ unlines
+        [ versionLine
+        , "Call patterns:"
+        , "  -h | --help        Print this help text."
+        , "  -V | --version     Print version info."
+        , "  --numeric-version  Print just the version number."
+        , "  FILE               Parses stdin with the LBNF grammar given in FILE."
+        ]
       exitFailure
+    version = do
+      putStr $ unlines
+        [ versionLine
+        , "Developed for the course Programming Language Technology;"
+        , "Chalmers DAT151 / University of Gothenburg DIT231."
+        , "License: BSD 3-clause."
+        ]
+    numericVersion = do
+      putStrLn ver
+      exitSuccess
 
 -- | Parse grammar and then use it to parse stdin.
 
