@@ -1,7 +1,7 @@
 cabal-version: 2.2
 
 name:           LR-demo
-version:        0.0.20241111
+version:        0.0.20250114
 synopsis:       LALR(1) parsetable generator and interpreter
 description:    An LALR(1) parsetable generator and interpreter.
 category:       Parsing
@@ -26,9 +26,11 @@ tested-with:
 
 extra-doc-files: README.md
 
+extra-source-files: src/LBNF.cf
+
 custom-setup
   setup-depends:
-      Cabal   >= 2.2   && < 4
+      Cabal   >= 2.2   && < 3.14
         -- Distribution.Simple.BuildPaths.autogenPackageModulesDir is new in Cabal-2.0
         -- We use cabal-version: 2.2, so also Cabal >= 2.2 for the sake of Stack.
     , base    >= 4.11  && < 5
