@@ -24,9 +24,15 @@ tested-with:
     GHC == 8.6.5
     GHC == 8.4.4
 
-extra-doc-files: README.md
+extra-doc-files:
+  CHANGELOG.md
+  README.md
 
 extra-source-files: src/LBNF.cf
+
+source-repository head
+  type: git
+  location: https://github.com/teach-plt/LR-demo.git
 
 custom-setup
   setup-depends:
@@ -66,7 +72,7 @@ library
       src
   build-depends:
       array
-    , base >=4.11 && <5
+    , base >= 4.11 && <5
     , containers
     , microlens
     , microlens-th

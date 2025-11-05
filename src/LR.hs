@@ -40,12 +40,13 @@ main = do
     ["--version"]         -> version
     ["--numeric-version"] -> numericVersion
     ["--license"]         -> printLicense
+    ["--licence"]         -> printLicense
     ['-':_]               -> usage
     [file]                -> run =<< readFile file
     _                     -> usage
   where
     ver = showVersion Self.version
-    versionLine = unwords [ "lr-demo version", ver, "(C) 2019-24 Andreas Abel" ]
+    versionLine = unwords [ "lr-demo version", ver, "(C) 2019-25 Andreas Abel" ]
     usage = do
       putStr $ unlines
         [ versionLine
