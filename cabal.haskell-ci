@@ -1,1 +1,5 @@
 branches: master
+
+-- For GHC 9.2.8 and below, the haddock step fails with:
+-- "setup: internal error when calculating transitive package dependencies."
+haddock: >= 9.4
